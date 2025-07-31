@@ -786,7 +786,21 @@ async def submit_orders(game_id: str, orders_data: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/api/game/{game_id}/build-orders")
+@app.post("/api/game/{game_id}/espionage-orders")
+async def submit_espionage_orders(game_id: str, espionage_data: Dict[str, Any]):
+    """Submit espionage orders for a player"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = games[game_id]
+    player_id = espionage_data.get("player_id")
+    orders = espionage_data.get("orders", [])
+    
+    try:
+        game.submit_espionage_orders(player_id, orders)
+        return {"status": "espionage_orders_submitted", "count": len(orders)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 async def submit_build_orders(game_id: str, build_data: Dict[str, Any]):
     """Submit build orders for a player"""
     if game_id not in games:
