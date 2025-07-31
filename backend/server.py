@@ -601,6 +601,7 @@ class GameEngine:
         # Create detailed combat report
         combat_report = {
             "system": target_system.name,
+            "turn": self.current_turn,
             "attackers": {owner: len(forces["starfleets"]) + forces["support"] 
                          for owner, forces in attacker_forces.items()},
             "defenders": defender_strength,
