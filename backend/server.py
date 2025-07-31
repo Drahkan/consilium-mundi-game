@@ -85,20 +85,27 @@ class GameEngine:
         self.turn_deadline = None
         
     def generate_galaxy(self):
-        """Generate a balanced galaxy map with interconnected solar systems"""
+        """Generate a balanced galaxy map with guaranteed connectivity"""
         num_players = self.config.num_players
         systems_per_player = 8
         total_systems = num_players * systems_per_player + 1
         
-        # Generate system positions in a circular pattern for balance
-        systems = []
-        center_x, center_y = 400, 300  # Center of the galaxy
+        # Clear existing systems
+        self.systems = {}
         
-        # Create home systems first - evenly spaced around a circle
-        home_radius = 150
+        # Galaxy dimensions
+        map_x, map_y = 800, 600
+        center_x, center_y = map_x // 2, map_y // 2
+        
+        # Phase 1: Create home systems in a balanced circle
         home_systems = []
+        home_radius = 180  # Distance from center
+        
         for i in range(num_players):
             angle = (2 * math.pi * i) / num_players
+            # Add some randomness to avoid perfect symmetry
+            angle += random.uniform(-0.3, 0.3)
+            
             x = center_x + home_radius * math.cos(angle)
             y = center_y + home_radius * math.sin(angle)
             
@@ -111,53 +118,195 @@ class GameEngine:
             system.is_home_system = True
             system.resources = {"tech": 1, "metals": 1, "chon": 1}
             home_systems.append(system)
-            systems.append(system)
         
-        # Generate remaining systems in rings around the galaxy
-        remaining_systems = total_systems - num_players
-        for i in range(remaining_systems):
-            # Distribute in rings of varying radius
-            ring = (i % 3) + 1  # 3 rings
-            radius = 80 + (ring * 60)
-            angle = random.uniform(0, 2 * math.pi)
-            
-            # Add some randomness to avoid perfect circles
-            radius += random.uniform(-20, 20)
-            x = center_x + radius * math.cos(angle)
-            y = center_y + radius * math.sin(angle)
-            
-            system = SolarSystem(
-                id=f"system_{i}",
-                name=f"System {i+1}",
-                x=x,
-                y=y
-            )
-            
-            # Generate random resources based on the design doc percentages
-            resource_roll = random.random()
-            if resource_roll < 0.15:  # 15% no resources
-                system.resources = {"tech": 0, "metals": 0, "chon": 0}
-            elif resource_roll < 0.40:  # 25% only CHON
-                system.resources = {"tech": 0, "metals": 0, "chon": 1}
-            elif resource_roll < 0.65:  # 25% only Metals
-                system.resources = {"tech": 0, "metals": 1, "chon": 0}
-            elif resource_roll < 0.85:  # 20% both
-                system.resources = {"tech": 0, "metals": 1, "chon": 1}
-            elif resource_roll < 0.90:  # 5% Metals + 2 CHON
-                system.resources = {"tech": 0, "metals": 1, "chon": 2}
-            elif resource_roll < 0.95:  # 5% 2 Metals + CHON
-                system.resources = {"tech": 0, "metals": 2, "chon": 1}
-            else:  # 5% 2 Metals + 2 CHON
-                system.resources = {"tech": 0, "metals": 2, "chon": 2}
-            
-            systems.append(system)
+        # Phase 2: Create core systems (25% of remaining systems)
+        remaining_systems = total_systems - len(home_systems)
+        core_systems_count = max(1, int(remaining_systems * 0.25))
+        core_systems = []
+        core_radius = 100  # Distance from center for core systems
         
-        # Generate connections (wormholes) between systems
-        self.generate_connections(systems)
+        for i in range(core_systems_count):
+            # Place core systems in center area
+            attempts = 0
+            while attempts < 100:
+                angle = random.uniform(0, 2 * math.pi)
+                radius = random.uniform(20, core_radius)
+                x = center_x + radius * math.cos(angle)
+                y = center_y + radius * math.sin(angle)
+                
+                # Check minimum distance from existing systems
+                valid = True
+                min_distance = 60
+                
+                for existing in home_systems + core_systems:
+                    dist = math.sqrt((x - existing.x)**2 + (y - existing.y)**2)
+                    if dist < min_distance:
+                        valid = False
+                        break
+                
+                if valid:
+                    system = SolarSystem(
+                        id=f"core_{i}",
+                        name=f"Core System {i+1}",
+                        x=x,
+                        y=y
+                    )
+                    system.resources = self.generate_system_resources()
+                    core_systems.append(system)
+                    break
+                
+                attempts += 1
         
-        # Store systems
-        for system in systems:
+        # Phase 3: Create player region systems
+        player_systems = []
+        systems_per_player_region = (remaining_systems - core_systems_count) // num_players
+        
+        for player_idx in range(num_players):
+            home_system = home_systems[player_idx]
+            player_region_systems = []
+            
+            for i in range(systems_per_player_region):
+                attempts = 0
+                while attempts < 100:
+                    # Place systems around the home system
+                    angle = random.uniform(0, 2 * math.pi)
+                    distance = random.uniform(50, 120)
+                    x = home_system.x + distance * math.cos(angle)
+                    y = home_system.y + distance * math.sin(angle)
+                    
+                    # Keep within map bounds
+                    x = max(50, min(map_x - 50, x))
+                    y = max(50, min(map_y - 50, y))
+                    
+                    # Check minimum distance from all existing systems
+                    valid = True
+                    min_distance = 60
+                    all_systems = home_systems + core_systems + player_systems
+                    
+                    for existing in all_systems:
+                        dist = math.sqrt((x - existing.x)**2 + (y - existing.y)**2)
+                        if dist < min_distance:
+                            valid = False
+                            break
+                    
+                    if valid:
+                        system = SolarSystem(
+                            id=f"player_{player_idx}_system_{i}",
+                            name=f"System {len(home_systems + core_systems + player_systems) + 1}",
+                            x=x,
+                            y=y
+                        )
+                        system.resources = self.generate_system_resources()
+                        player_region_systems.append(system)
+                        player_systems.append(system)
+                        break
+                    
+                    attempts += 1
+        
+        # Combine all systems
+        all_systems = home_systems + core_systems + player_systems
+        
+        # Phase 4: Generate guaranteed connectivity
+        self.generate_guaranteed_connections(all_systems, home_systems, core_systems, num_players)
+        
+        # Store all systems
+        for system in all_systems:
             self.systems[system.id] = system
+    
+    def generate_system_resources(self):
+        """Generate resources based on design document percentages"""
+        resource_roll = random.random()
+        if resource_roll < 0.15:  # 15% no resources
+            return {"tech": 0, "metals": 0, "chon": 0}
+        elif resource_roll < 0.40:  # 25% only CHON
+            return {"tech": 0, "metals": 0, "chon": 1}
+        elif resource_roll < 0.65:  # 25% only Metals
+            return {"tech": 0, "metals": 1, "chon": 0}
+        elif resource_roll < 0.85:  # 20% both
+            return {"tech": 0, "metals": 1, "chon": 1}
+        elif resource_roll < 0.90:  # 5% Metals + 2 CHON
+            return {"tech": 0, "metals": 1, "chon": 2}
+        elif resource_roll < 0.95:  # 5% 2 Metals + CHON
+            return {"tech": 0, "metals": 2, "chon": 1}
+        else:  # 5% 2 Metals + 2 CHON
+            return {"tech": 0, "metals": 2, "chon": 2}
+    
+    def generate_guaranteed_connections(self, all_systems, home_systems, core_systems, num_players):
+        """Generate wormhole connections ensuring no isolated regions"""
+        # Phase 1: Connect each player's home system to nearest core system
+        for home_system in home_systems:
+            nearest_core = min(core_systems, 
+                             key=lambda core: math.sqrt((home_system.x - core.x)**2 + (home_system.y - core.y)**2))
+            
+            home_system.connections.append(nearest_core.id)
+            nearest_core.connections.append(home_system.id)
+        
+        # Phase 2: Connect adjacent player regions (ring topology)
+        for i in range(num_players):
+            current_home = home_systems[i]
+            next_home = home_systems[(i + 1) % num_players]
+            
+            # Find closest non-home systems between these players
+            current_region = [s for s in all_systems 
+                            if not s.is_home_system 
+                            and s not in core_systems
+                            and math.sqrt((s.x - current_home.x)**2 + (s.y - current_home.y)**2) < 150]
+            
+            next_region = [s for s in all_systems 
+                         if not s.is_home_system 
+                         and s not in core_systems
+                         and math.sqrt((s.x - next_home.x)**2 + (s.y - next_home.y)**2) < 150]
+            
+            if current_region and next_region:
+                # Find closest pair between regions
+                min_dist = float('inf')
+                best_pair = None
+                
+                for curr_sys in current_region:
+                    for next_sys in next_region:
+                        dist = math.sqrt((curr_sys.x - next_sys.x)**2 + (curr_sys.y - next_sys.y)**2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_pair = (curr_sys, next_sys)
+                
+                if best_pair:
+                    best_pair[0].connections.append(best_pair[1].id)
+                    best_pair[1].connections.append(best_pair[0].id)
+                    
+                    # Connect these bridge systems to their respective home systems
+                    best_pair[0].connections.append(current_home.id)
+                    current_home.connections.append(best_pair[0].id)
+                    
+                    best_pair[1].connections.append(next_home.id)
+                    next_home.connections.append(best_pair[1].id)
+        
+        # Phase 3: Fill in additional connections to meet minimum requirements
+        for system in all_systems:
+            target_connections = 4 if system.is_home_system else random.randint(3, 5)
+            
+            while len(system.connections) < target_connections:
+                # Find nearest unconnected systems
+                candidates = []
+                for other in all_systems:
+                    if (other.id != system.id and 
+                        other.id not in system.connections):
+                        
+                        dist = math.sqrt((system.x - other.x)**2 + (system.y - other.y)**2)
+                        candidates.append((other, dist))
+                
+                if not candidates:
+                    break
+                
+                # Sort by distance and connect to nearest
+                candidates.sort(key=lambda x: x[1])
+                nearest = candidates[0][0]
+                
+                # Avoid over-connecting systems
+                if len(nearest.connections) < 6:
+                    system.connections.append(nearest.id)
+                    nearest.connections.append(system.id)
+                else:
+                    break
     
     def generate_connections(self, systems):
         """Generate wormhole connections between systems"""
