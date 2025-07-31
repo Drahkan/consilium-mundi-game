@@ -379,48 +379,83 @@ class GameEngine:
             self.resolve_system_combat(system_id, incoming_starfleets)
     
     def resolve_system_combat(self, system_id: str, incoming_starfleets: List[Starfleet]):
-        """Resolve combat in a specific system"""
+        """Resolve combat in a specific system with support mechanics"""
         target_system = self.systems[system_id]
         defending_starfleets = list(target_system.starfleets.values())
         
-        # Group by owner
-        attacker_groups = {}
+        # Calculate attacking forces by player
+        attacker_forces = {}
         for starfleet in incoming_starfleets:
             owner = starfleet.owner
-            if owner not in attacker_groups:
-                attacker_groups[owner] = []
-            attacker_groups[owner].append(starfleet)
+            if owner not in attacker_forces:
+                attacker_forces[owner] = {"starfleets": [], "support": 0}
+            attacker_forces[owner]["starfleets"].append(starfleet)
         
+        # Calculate support for attackers
+        for owner in attacker_forces:
+            for starfleet in self.starfleets.values():
+                if (starfleet.orders and starfleet.orders.get("type") == "support" and
+                    starfleet.owner == owner and starfleet.orders.get("target") == system_id):
+                    attacker_forces[owner]["support"] += 1
+        
+        # Calculate defending forces
         defender_owner = target_system.owner
         defender_strength = len(defending_starfleets)
         
-        # Add starport defense if present
-        if "starport" in target_system.upgrades:
+        # Add starport defense if present and not sabotaged
+        if ("starport" in target_system.upgrades and 
+            not hasattr(target_system, 'sabotaged_upgrades') or
+            "starport" not in getattr(target_system, 'sabotaged_upgrades', [])):
             defender_strength += 1
         
+        # Add support for defenders
+        for starfleet in self.starfleets.values():
+            if (starfleet.orders and starfleet.orders.get("type") == "support" and
+                starfleet.owner == defender_owner and starfleet.orders.get("target") == system_id):
+                defender_strength += 1
+        
         # Calculate total attacking strength
-        total_attacker_strength = sum(len(group) for group in attacker_groups.values())
+        total_attacker_strength = 0
+        strongest_attacker = None
+        max_attacker_strength = 0
+        
+        for owner, forces in attacker_forces.items():
+            owner_strength = len(forces["starfleets"]) + forces["support"]
+            total_attacker_strength += owner_strength
+            
+            if owner_strength > max_attacker_strength:
+                max_attacker_strength = owner_strength
+                strongest_attacker = owner
+        
+        # Create detailed combat report
+        combat_report = {
+            "system": target_system.name,
+            "attackers": {owner: len(forces["starfleets"]) + forces["support"] 
+                         for owner, forces in attacker_forces.items()},
+            "defenders": defender_strength,
+            "outcome": None,
+            "casualties": {"attackers": [], "defenders": []}
+        }
         
         # Determine combat outcome
         if total_attacker_strength > defender_strength:
             # Attackers win
+            combat_report["outcome"] = "attacker_victory"
             
             # Destroy defending starfleets
             for starfleet in defending_starfleets:
+                combat_report["casualties"]["defenders"].append(starfleet.id)
                 self.destroy_starfleet(starfleet.id)
             
-            # Destroy starport if present
-            if "starport" in target_system.upgrades:
+            # Destroy starport if present (unless destabilized)
+            if ("starport" in target_system.upgrades and 
+                not getattr(target_system, 'destabilized', False)):
                 target_system.upgrades.remove("starport")
             
-            # Find strongest attacking player
-            strongest_attacker = max(attacker_groups.keys(), 
-                                   key=lambda owner: len(attacker_groups[owner]))
-            
-            # Transfer system ownership
+            # Transfer system ownership to strongest attacker
             target_system.owner = strongest_attacker
             
-            # Move attacking starfleets to the system
+            # Move strongest attacker's starfleets to the system
             for starfleet in incoming_starfleets:
                 if starfleet.owner == strongest_attacker:
                     # Move starfleet to new system
@@ -431,17 +466,39 @@ class GameEngine:
                     target_system.starfleets[starfleet.id] = starfleet
                 else:
                     # Other attackers retreat
+                    combat_report["casualties"]["attackers"].append(starfleet.id)
                     self.retreat_starfleet(starfleet)
         
         elif total_attacker_strength == defender_strength:
             # Stalemate - all attacking starfleets retreat
+            combat_report["outcome"] = "stalemate"
             for starfleet in incoming_starfleets:
                 self.retreat_starfleet(starfleet)
         
         else:
-            # Defenders win - attacking starfleets retreat
+            # Defenders win - attacking starfleets retreat or are destroyed
+            combat_report["outcome"] = "defender_victory"
             for starfleet in incoming_starfleets:
-                self.retreat_starfleet(starfleet)
+                if max_attacker_strength < defender_strength - 1:
+                    # Overwhelming defender victory - destroy some attackers
+                    combat_report["casualties"]["attackers"].append(starfleet.id)
+                    self.destroy_starfleet(starfleet.id)
+                else:
+                    # Close victory - attackers retreat
+                    self.retreat_starfleet(starfleet)
+        
+        # Store combat report for players to review
+        if not hasattr(self, 'combat_reports'):
+            self.combat_reports = []
+        self.combat_reports.append(combat_report)
+        
+        # Clear temporary espionage effects
+        if hasattr(target_system, 'sabotaged_upgrades'):
+            delattr(target_system, 'sabotaged_upgrades')
+        if hasattr(target_system, 'destabilized'):
+            delattr(target_system, 'destabilized')
+        if hasattr(target_system, 'counter_espionage'):
+            delattr(target_system, 'counter_espionage')
     
     def retreat_starfleet(self, starfleet: Starfleet):
         """Handle starfleet retreat"""
