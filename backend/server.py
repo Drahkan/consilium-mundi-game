@@ -361,6 +361,9 @@ class GameEngine:
     
     def resolution_phase(self):
         """Phase 3: Resolve all starfleet movement and combat"""
+        # First resolve espionage
+        self.resolve_espionage()
+        
         movements = {}  # system_id -> list of incoming starfleets
         
         # Collect all movement orders
