@@ -17,6 +17,7 @@ function App() {
   const [starfleetOrders, setStarfleetOrders] = useState({});
   const [buildOrders, setBuildOrders] = useState({});
   const [showBuildPanel, setShowBuildPanel] = useState(false);
+  const [showCombatReports, setShowCombatReports] = useState(false);
 
   // Create a new game
   const createGame = async () => {
