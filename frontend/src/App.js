@@ -17,6 +17,7 @@ function App() {
   const [starfleetOrders, setStarfleetOrders] = useState({});
   const [buildOrders, setBuildOrders] = useState({});
   const [showBuildPanel, setShowBuildPanel] = useState(false);
+  const [showCombatReports, setShowCombatReports] = useState(false);
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
 
