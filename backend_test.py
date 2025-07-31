@@ -446,13 +446,16 @@ class ConsiliumMundiAPITester:
             return False
 
     def test_resource_management(self):
-        """Test resource collection and management"""
+        """Test resource collection and management - comprehensive test for bug fix"""
         if not self.game_id or not self.player_id:
             print("❌ No game ID or player ID available for testing")
             return False
         
+        print("\n🔍 Testing Resource Management Bug Fix...")
+        
+        # Test 1: Check initial player resources after game creation
         success, game_state = self.run_test(
-            "Get Game State for Resources",
+            "Get Initial Game State for Resources",
             "GET",
             f"api/game/{self.game_id}/state?player_id={self.player_id}",
             200
@@ -461,14 +464,113 @@ class ConsiliumMundiAPITester:
         if not success:
             return False
         
-        resources = game_state.get('player_resources', {})
-        print(f"   Player resources: Tech:{resources.get('tech', 0)}, Metals:{resources.get('metals', 0)}, CHON:{resources.get('chon', 0)}")
+        initial_resources = game_state.get('player_resources', {})
+        print(f"   Initial Player resources: Tech:{initial_resources.get('tech', 0)}, Metals:{initial_resources.get('metals', 0)}, CHON:{initial_resources.get('chon', 0)}")
         
-        # Check if resources are reasonable (should have starting resources)
-        if resources.get('tech', 0) >= 0 and resources.get('metals', 0) >= 0 and resources.get('chon', 0) >= 0:
-            return True
+        # Verify initial resources are correct (should be 3,3,3 as per code)
+        if initial_resources.get('tech', 0) != 3 or initial_resources.get('metals', 0) != 3 or initial_resources.get('chon', 0) != 3:
+            print(f"❌ Initial resources incorrect. Expected 3,3,3 but got {initial_resources}")
+            return False
+        
+        # Test 2: Check resource collection from owned systems
+        owned_systems = []
+        total_system_resources = {"tech": 0, "metals": 0, "chon": 0}
+        
+        for system_id, system in game_state.get('systems', {}).items():
+            if system.get('owner') == self.player_id:
+                owned_systems.append(system_id)
+                sys_resources = system.get('resources', {})
+                total_system_resources["tech"] += sys_resources.get('tech', 0)
+                total_system_resources["metals"] += sys_resources.get('metals', 0)
+                total_system_resources["chon"] += sys_resources.get('chon', 0)
+                
+                # Check for upgrade bonuses
+                upgrades = system.get('upgrades', [])
+                if "colony" in upgrades:
+                    total_system_resources["tech"] += 1
+                if "mining_facilities" in upgrades:
+                    total_system_resources["metals"] += 1
+                    total_system_resources["chon"] += 1
+        
+        print(f"   Owned systems: {len(owned_systems)}")
+        print(f"   Total system resources per turn: Tech:{total_system_resources['tech']}, Metals:{total_system_resources['metals']}, CHON:{total_system_resources['chon']}")
+        
+        # Test 3: Advance through several turns and verify resource accumulation
+        print("\n   Testing resource accumulation over multiple turns...")
+        
+        for turn in range(3):  # Test 3 turns
+            print(f"\n   --- Turn {turn + 1} ---")
+            
+            # Resolve turn to trigger resource phase
+            success, response = self.run_test(
+                f"Resolve Turn {turn + 1}",
+                "POST",
+                f"api/game/{self.game_id}/resolve-turn",
+                200
+            )
+            
+            if not success:
+                print(f"❌ Failed to resolve turn {turn + 1}")
+                return False
+            
+            # Get updated game state
+            success, updated_state = self.run_test(
+                f"Get Game State After Turn {turn + 1}",
+                "GET",
+                f"api/game/{self.game_id}/state?player_id={self.player_id}",
+                200
+            )
+            
+            if not success:
+                return False
+            
+            current_resources = updated_state.get('player_resources', {})
+            print(f"   Resources after turn {turn + 1}: Tech:{current_resources.get('tech', 0)}, Metals:{current_resources.get('metals', 0)}, CHON:{current_resources.get('chon', 0)}")
+            
+            # Calculate expected resources (initial + (turn * system_resources))
+            expected_resources = {
+                "tech": initial_resources['tech'] + ((turn + 1) * total_system_resources['tech']),
+                "metals": initial_resources['metals'] + ((turn + 1) * total_system_resources['metals']),
+                "chon": initial_resources['chon'] + ((turn + 1) * total_system_resources['chon'])
+            }
+            
+            print(f"   Expected resources: Tech:{expected_resources['tech']}, Metals:{expected_resources['metals']}, CHON:{expected_resources['chon']}")
+            
+            # Verify resources are accumulating, not being replaced
+            if (current_resources.get('tech', 0) < expected_resources['tech'] - 10 or  # Allow some tolerance for upkeep
+                current_resources.get('metals', 0) < expected_resources['metals'] - 10 or
+                current_resources.get('chon', 0) < expected_resources['chon'] - 10):
+                print(f"❌ Resources not accumulating properly on turn {turn + 1}")
+                print(f"   Current: {current_resources}")
+                print(f"   Expected (minimum): {expected_resources}")
+                return False
+            
+            print(f"   ✅ Resources accumulating correctly on turn {turn + 1}")
+        
+        # Test 4: Verify resources are pooled globally per player (not per system)
+        print("\n   Testing global resource pooling...")
+        final_state_success, final_state = self.run_test(
+            "Get Final Game State",
+            "GET",
+            f"api/game/{self.game_id}/state",
+            200
+        )
+        
+        if not final_state_success:
+            return False
+        
+        # Check that player_resources is a single pool, not per-system
+        all_player_resources = final_state.get('player_resources', {})
+        if self.player_id in all_player_resources:
+            player_resources = all_player_resources[self.player_id]
+            if isinstance(player_resources, dict) and 'tech' in player_resources:
+                print("   ✅ Resources are pooled globally per player")
+                return True
+            else:
+                print("❌ Resources not properly structured as global pool")
+                return False
         else:
-            print("❌ Invalid resource values")
+            print("❌ Player resources not found in global pool")
             return False
 
 def main():
