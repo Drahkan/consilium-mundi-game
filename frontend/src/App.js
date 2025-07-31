@@ -683,7 +683,19 @@ function App() {
           
           <div className="info-panel">
             {renderSystemDetails()}
+            {renderBuildingPanel()}
             {renderOrdersPanel()}
+            
+            {(Object.keys(starfleetOrders).length > 0 || Object.keys(buildOrders).length > 0) && (
+              <div className="global-submit-section">
+                <p>
+                  {Object.keys(starfleetOrders).length} movement orders, {Object.keys(buildOrders).length} build orders pending
+                </p>
+                <button onClick={submitAllOrders} className="submit-all-orders-btn">
+                  Submit All Orders
+                </button>
+              </div>
+            )}
             
             {gameState && (
               <div className="game-status">
