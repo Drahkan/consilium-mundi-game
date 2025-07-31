@@ -750,7 +750,7 @@ class GameEngine:
                             "orders": sf.orders
                         }
                         for sf in s.starfleets.values()
-                    ] if player_id else [],
+                    ],
                     "upgrades": s.upgrades,
                     "is_home_system": s.is_home_system
                 }
