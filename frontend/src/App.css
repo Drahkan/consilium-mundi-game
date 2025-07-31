@@ -421,6 +421,139 @@ body {
   box-shadow: 0 4px 12px rgba(214, 158, 46, 0.4);
 }
 
+.build-controls {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.build-toggle-btn {
+  background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%);
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.build-toggle-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(128, 90, 213, 0.4);
+}
+
+.building-panel {
+  background: rgba(45, 55, 72, 0.6);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.building-panel h4 {
+  color: #805ad5;
+  margin-bottom: 1rem;
+}
+
+.build-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.build-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(74, 85, 104, 0.6);
+  border-radius: 6px;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.build-info {
+  flex: 1;
+}
+
+.build-info strong {
+  color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+.build-cost {
+  color: #a0aec0;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.build-requirement {
+  color: #d69e2e;
+  font-size: 0.8rem;
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+.build-btn {
+  background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  color: #ffffff;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.build-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(128, 90, 213, 0.4);
+}
+
+.build-btn.disabled {
+  background: rgba(74, 85, 104, 0.6);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.5;
+}
+
+.build-queue {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d69e2e;
+  font-size: 0.9rem;
+}
+
+.global-submit-section {
+  background: rgba(214, 158, 46, 0.1);
+  border: 1px solid rgba(214, 158, 46, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.submit-all-orders-btn {
+  background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 1rem 2rem;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  margin-top: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.submit-all-orders-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(214, 158, 46, 0.6);
+}
+
 .game-status {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 1.5rem;
