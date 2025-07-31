@@ -1193,6 +1193,14 @@ function App() {
                   Combat Reports ({gameState.combat_reports.length})
                 </button>
               )}
+              
+              <button 
+                onClick={centerHomeWorld}
+                className="center-home-btn"
+                title="Center map on your home world"
+              >
+                Center Home
+              </button>
             </div>
           )}
         </div>
