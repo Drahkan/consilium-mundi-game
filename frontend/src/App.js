@@ -572,7 +572,7 @@ function App() {
     const system = gameState.systems[selectedSystem];
     if (!system || system.owner !== currentPlayer) return null;
     
-    const resources = gameState.player_resources || {};
+    const availableResources = calculateAvailableResources();
     
     const buildOptions = [
       {
@@ -623,12 +623,13 @@ function App() {
       <div className="building-panel">
         <h4>Construction</h4>
         <p>Build in: {system.name}</p>
+        <p>Available after pending orders: T:{availableResources.tech} M:{availableResources.metals} C:{availableResources.chon}</p>
         
         <div className="build-options">
           {buildOptions.map(option => {
-            const canAfford = resources.tech >= option.cost.tech &&
-                             resources.metals >= option.cost.metals &&
-                             resources.chon >= option.cost.chon;
+            const canAfford = availableResources.tech >= option.cost.tech &&
+                             availableResources.metals >= option.cost.metals &&
+                             availableResources.chon >= option.cost.chon;
             
             const isDisabled = !option.canBuild || !canAfford;
             
