@@ -425,6 +425,18 @@ function App() {
               ))}
             </div>
           )}
+          
+          {/* Build controls for owned systems */}
+          {system.owner === currentPlayer && (
+            <div className="build-controls">
+              <button 
+                onClick={() => setShowBuildPanel(!showBuildPanel)}
+                className="build-toggle-btn"
+              >
+                {showBuildPanel ? 'Hide Building' : 'Show Building'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
