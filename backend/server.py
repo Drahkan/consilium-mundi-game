@@ -396,24 +396,29 @@ class GameEngine:
     def resource_phase(self):
         """Phase 1: Collect resources from controlled systems"""
         for player_id in self.players:
-            total_resources = {"tech": 0, "metals": 0, "chon": 0}
+            new_resources = {"tech": 0, "metals": 0, "chon": 0}
             
             # Sum up resources from all owned systems
             for system in self.systems.values():
                 if system.owner == player_id:
-                    total_resources["tech"] += system.resources["tech"]
-                    total_resources["metals"] += system.resources["metals"]
-                    total_resources["chon"] += system.resources["chon"]
+                    new_resources["tech"] += system.resources["tech"]
+                    new_resources["metals"] += system.resources["metals"]
+                    new_resources["chon"] += system.resources["chon"]
                     
                     # Add bonus from upgrades
                     if "colony" in system.upgrades:
-                        total_resources["tech"] += 1
+                        new_resources["tech"] += 1
                     if "mining_facilities" in system.upgrades:
-                        total_resources["metals"] += 1
-                        total_resources["chon"] += 1
+                        new_resources["metals"] += 1
+                        new_resources["chon"] += 1
             
-            # Update player resources
-            self.player_resources[player_id] = total_resources
+            # Add new resources to existing player resources (accumulate globally)
+            current_resources = self.player_resources.get(player_id, {"tech": 0, "metals": 0, "chon": 0})
+            self.player_resources[player_id] = {
+                "tech": current_resources["tech"] + new_resources["tech"],
+                "metals": current_resources["metals"] + new_resources["metals"],
+                "chon": current_resources["chon"] + new_resources["chon"]
+            }
     
     def upkeep_phase(self):
         """Phase 2: Pay upkeep for starfleets"""
