@@ -583,9 +583,9 @@ function App() {
         
         {Object.keys(starfleetOrders).length > 0 && (
           <div className="submit-section">
-            <p>{Object.keys(starfleetOrders).length} orders pending</p>
+            <p>{Object.keys(starfleetOrders).length} movement orders pending</p>
             <button onClick={submitOrders} className="submit-orders-btn">
-              Submit All Orders
+              Submit Movement Orders
             </button>
           </div>
         )}
