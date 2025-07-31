@@ -21,6 +21,13 @@ function App() {
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
   const [showOrderSummary, setShowOrderSummary] = useState(false);
+  
+  // Map navigation state
+  const [mapZoom, setMapZoom] = useState(1);
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Create a new game
   const createGame = async () => {
