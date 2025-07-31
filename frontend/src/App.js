@@ -282,6 +282,23 @@ function App() {
 
   // Submit all orders (both movement and build)
   const submitAllOrders = async () => {
+    const movementCount = Object.keys(starfleetOrders).length;
+    const buildCount = Object.keys(buildOrders).length;
+    
+    if (movementCount === 0 && buildCount === 0) {
+      alert('No orders to submit!');
+      return;
+    }
+    
+    // Order confirmation popup
+    const confirmationMessage = `Are you sure you want to finalize your turn?\n\n` +
+      `${movementCount} movement orders and ${buildCount} build orders will be submitted.\n` +
+      `This will end your turn and you cannot make changes until the next turn.`;
+    
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+    
     let success = true;
     
     try {
@@ -296,7 +313,7 @@ function App() {
       }
       
       if (success) {
-        alert(`Orders submitted for ${getPlayerName(currentPlayer)}!`);
+        alert(`Turn finalized for ${getPlayerName(currentPlayer)}!`);
       }
     } catch (err) {
       setError(err.message);
