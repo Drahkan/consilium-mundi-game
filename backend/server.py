@@ -733,6 +733,8 @@ class GameEngine:
             },
             "players": self.players,
             "player_resources": self.player_resources.get(player_id) if player_id else self.player_resources,
+            "combat_reports": getattr(self, 'combat_reports', []),
+            "victory_status": self.check_victory_condition(),
             "config": {
                 "num_players": self.config.num_players,
                 "galaxy_size": self.config.galaxy_size
