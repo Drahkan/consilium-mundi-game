@@ -456,8 +456,110 @@ class GameEngine:
     
     def build_phase(self):
         """Phase 4: Build new starfleets and upgrades"""
-        # TODO: Implement building system
-        pass
+        for player_id in self.players:
+            if player_id in self.player_orders:
+                for order in self.player_orders[player_id]:
+                    if order.get("type") == "build":
+                        self.execute_build_order(player_id, order)
+        
+        # Clear build orders
+        for player_id in self.players:
+            self.player_orders[player_id] = []
+    
+    def execute_build_order(self, player_id: str, order: Dict[str, Any]):
+        """Execute a single build order"""
+        build_type = order.get("build_type")
+        system_id = order.get("system_id")
+        
+        if system_id not in self.systems:
+            return
+        
+        system = self.systems[system_id]
+        if system.owner != player_id:
+            return
+        
+        resources = self.player_resources[player_id]
+        
+        if build_type == "starfleet":
+            # Cost: 1 Tech, 1 Metals, 1 CHON
+            if (resources["tech"] >= 1 and resources["metals"] >= 1 and resources["chon"] >= 1 and
+                "shipyard" in system.upgrades):
+                
+                # Pay cost
+                resources["tech"] -= 1
+                resources["metals"] -= 1
+                resources["chon"] -= 1
+                
+                # Create starfleet
+                fleet_id = f"fleet_{player_id}_{len(self.starfleets)}"
+                starfleet = Starfleet(fleet_id, player_id, system_id)
+                
+                system.starfleets[fleet_id] = starfleet
+                self.starfleets[fleet_id] = starfleet
+        
+        elif build_type == "starport":
+            # Cost: 2 Tech, 2 Metals, 2 CHON
+            if (resources["tech"] >= 2 and resources["metals"] >= 2 and resources["chon"] >= 2 and
+                "starport" not in system.upgrades):
+                
+                resources["tech"] -= 2
+                resources["metals"] -= 2
+                resources["chon"] -= 2
+                system.upgrades.append("starport")
+        
+        elif build_type == "shipyard":
+            # Cost: 3 Tech, 3 Metals, 1 CHON
+            if (resources["tech"] >= 3 and resources["metals"] >= 3 and resources["chon"] >= 1 and
+                "shipyard" not in system.upgrades):
+                
+                resources["tech"] -= 3
+                resources["metals"] -= 3
+                resources["chon"] -= 1
+                system.upgrades.append("shipyard")
+        
+        elif build_type == "colony":
+            # Cost: 0 Tech, 2 Metals, 2 CHON
+            if (resources["metals"] >= 2 and resources["chon"] >= 2 and
+                "colony" not in system.upgrades):
+                
+                resources["metals"] -= 2
+                resources["chon"] -= 2
+                system.upgrades.append("colony")
+        
+        elif build_type == "mining_facilities":
+            # Cost: 2 Tech, 2 Metals, 1 CHON
+            if (resources["tech"] >= 2 and resources["metals"] >= 2 and resources["chon"] >= 1 and
+                "mining_facilities" not in system.upgrades):
+                
+                resources["tech"] -= 2
+                resources["metals"] -= 2
+                resources["chon"] -= 1
+                system.upgrades.append("mining_facilities")
+        
+        elif build_type == "wormhole_generator":
+            # Cost: 6 Tech, 2 Metals, 0 CHON
+            if (resources["tech"] >= 6 and resources["metals"] >= 2 and
+                "wormhole_generator" not in system.upgrades):
+                
+                resources["tech"] -= 6
+                resources["metals"] -= 2
+                system.upgrades.append("wormhole_generator")
+    
+    def submit_build_orders(self, player_id: str, orders: List[Dict[str, Any]]):
+        """Submit build orders for a player"""
+        if self.phase != "activity":
+            raise ValueError("Can only submit build orders during activity phase")
+        
+        # Store orders for build phase
+        if player_id not in self.player_orders:
+            self.player_orders[player_id] = []
+        
+        for order in orders:
+            if order.get("type") == "build":
+                # Validate the build order
+                system_id = order.get("system_id")
+                if system_id in self.systems and self.systems[system_id].owner == player_id:
+                    self.player_orders[player_id].append(order)
     
     def get_game_state(self, player_id: str = None):
         """Get current game state (optionally filtered for specific player)"""
