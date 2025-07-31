@@ -500,6 +500,53 @@ class GameEngine:
         target_system = self.systems[system_id]
         defending_starfleets = list(target_system.starfleets.values())
         
+        # Check if system is uncontrolled (no owner, no starfleets)
+        if not target_system.owner and len(defending_starfleets) == 0:
+            # Automatic capture of uncontrolled system
+            if incoming_starfleets:
+                # Find strongest attacking player
+                attacker_groups = {}
+                for starfleet in incoming_starfleets:
+                    owner = starfleet.owner
+                    if owner not in attacker_groups:
+                        attacker_groups[owner] = []
+                    attacker_groups[owner].append(starfleet)
+                
+                strongest_attacker = max(attacker_groups.keys(), 
+                                       key=lambda owner: len(attacker_groups[owner]))
+                
+                # Transfer system ownership
+                target_system.owner = strongest_attacker
+                
+                # Move strongest attacker's starfleets to the system
+                for starfleet in incoming_starfleets:
+                    if starfleet.owner == strongest_attacker:
+                        # Move starfleet to new system
+                        old_system = self.systems[starfleet.system_id]
+                        del old_system.starfleets[starfleet.id]
+                        
+                        starfleet.system_id = system_id
+                        target_system.starfleets[starfleet.id] = starfleet
+                    else:
+                        # Other attackers retreat (though shouldn't happen in uncontrolled systems)
+                        self.retreat_starfleet(starfleet)
+                
+                # Create combat report for automatic capture
+                combat_report = {
+                    "system": target_system.name,
+                    "attackers": {owner: len(group) for owner, group in attacker_groups.items()},
+                    "defenders": 0,
+                    "outcome": "automatic_capture",
+                    "casualties": {"attackers": [], "defenders": []}
+                }
+                
+                if not hasattr(self, 'combat_reports'):
+                    self.combat_reports = []
+                self.combat_reports.append(combat_report)
+            
+            return  # End function for uncontrolled systems
+        
+        # Normal combat resolution for controlled systems
         # Calculate attacking forces by player
         attacker_forces = {}
         for starfleet in incoming_starfleets:
@@ -519,17 +566,18 @@ class GameEngine:
         defender_owner = target_system.owner
         defender_strength = len(defending_starfleets)
         
-        # Add starport defense if present and not sabotaged
-        if ("starport" in target_system.upgrades and 
+        # Add starport defense if present and not sabotaged (only for controlled systems)
+        if (defender_owner and "starport" in target_system.upgrades and 
             not hasattr(target_system, 'sabotaged_upgrades') or
             "starport" not in getattr(target_system, 'sabotaged_upgrades', [])):
             defender_strength += 1
         
-        # Add support for defenders
-        for starfleet in self.starfleets.values():
-            if (starfleet.orders and starfleet.orders.get("type") == "support" and
-                starfleet.owner == defender_owner and starfleet.orders.get("target") == system_id):
-                defender_strength += 1
+        # Add support for defenders (only if system has an owner)
+        if defender_owner:
+            for starfleet in self.starfleets.values():
+                if (starfleet.orders and starfleet.orders.get("type") == "support" and
+                    starfleet.owner == defender_owner and starfleet.orders.get("target") == system_id):
+                    defender_strength += 1
         
         # Calculate total attacking strength
         total_attacker_strength = 0
