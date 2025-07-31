@@ -568,6 +568,122 @@ body {
   box-shadow: 0 6px 20px rgba(214, 158, 46, 0.6);
 }
 
+.combat-reports-btn {
+  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: #ffffff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.combat-reports-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+}
+
+.combat-reports-panel {
+  background: rgba(229, 62, 62, 0.1);
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.combat-reports-panel h4 {
+  color: #e53e3e;
+  margin-bottom: 1rem;
+}
+
+.combat-report {
+  background: rgba(45, 55, 72, 0.6);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-left: 3px solid #e53e3e;
+}
+
+.report-header {
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 0.5rem;
+}
+
+.report-details {
+  font-size: 0.9rem;
+  color: #a0aec0;
+}
+
+.outcome {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.outcome.attacker-victory {
+  color: #f56565;
+}
+
+.outcome.defender-victory {
+  color: #48bb78;
+}
+
+.outcome.stalemate {
+  color: #ed8936;
+}
+
+.forces {
+  margin: 0.5rem 0;
+}
+
+.forces div {
+  margin-bottom: 0.25rem;
+}
+
+.casualties {
+  color: #f56565;
+  font-style: italic;
+}
+
+.victory-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+  border: 3px solid #ffd700;
+  border-radius: 16px;
+  padding: 2rem;
+  z-index: 1000;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  min-width: 400px;
+}
+
+.victory-header h2 {
+  color: #ffffff;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+}
+
+.victory-details {
+  color: #ffffff;
+  font-size: 1.2rem;
+}
+
+.victory-details p {
+  margin-bottom: 0.75rem;
+}
+
+.victory-details strong {
+  color: #ffd700;
+  font-size: 1.3rem;
+}
+
 .game-status {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 1.5rem;
