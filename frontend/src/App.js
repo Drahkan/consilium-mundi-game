@@ -637,6 +637,12 @@ function App() {
           className="galaxy-map" 
           viewBox="0 0 800 600"
           preserveAspectRatio="xMidYMid meet"
+          onWheel={handleMapWheel}
+          onMouseDown={handleMapMouseDown}
+          onMouseMove={handleMapMouseMove}
+          onMouseUp={handleMapMouseUp}
+          onMouseLeave={handleMapMouseUp}
+          style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
           {/* Background */}
           <defs>
@@ -647,87 +653,90 @@ function App() {
           </defs>
           <rect width="800" height="600" fill="url(#spaceGradient)" />
           
-          {/* Draw connections first */}
-          {systems.map(system => 
-            system.connections.map(connId => {
-              const connSystem = gameState.systems[connId];
-              if (!connSystem) return null;
-              
-              return (
-                <line
-                  key={`${system.id}-${connId}`}
-                  x1={system.x}
-                  y1={system.y}
-                  x2={connSystem.x}
-                  y2={connSystem.y}
-                  stroke="#4a5568"
-                  strokeWidth="1"
-                  opacity="0.6"
-                />
-              );
-            })
-          )}
-          
-          {/* Draw systems */}
-          {systems.map(system => (
-            <g key={system.id}>
-              {/* System circle */}
-              <circle
-                cx={system.x}
-                cy={system.y}
-                r={system.is_home_system ? "12" : "8"}
-                fill={getPlayerColor(system.owner)}
-                stroke={selectedSystem === system.id ? "#ffd700" : "#ffffff"}
-                strokeWidth={selectedSystem === system.id ? "3" : system.is_home_system ? "2" : "1"}
-                className="system-node"
-                onClick={() => handleSystemClick(system.id)}
-                style={{ cursor: 'pointer' }}
-              />
-              
-              {/* System name */}
-              <text
-                x={system.x}
-                y={system.y - 18}
-                fill="#ffffff"
-                fontSize="10"
-                textAnchor="middle"
-                className="system-label"
-              >
-                {system.name}
-              </text>
-              
-              {/* Resource indicators */}
-              <text
-                x={system.x}
-                y={system.y + 25}
-                fill="#a0aec0"
-                fontSize="8"
-                textAnchor="middle"
-                className="resource-label"
-              >
-                T:{system.resources.tech} M:{system.resources.metals} C:{system.resources.chon}
-              </text>
-              
-              {/* Starfleet indicators */}
-              {system.starfleet_details && system.starfleet_details.map((starfleet, index) => (
+          {/* Main map group with zoom and pan transforms */}
+          <g transform={`translate(${mapPan.x}, ${mapPan.y}) scale(${mapZoom})`}>
+            {/* Draw connections first */}
+            {systems.map(system => 
+              system.connections.map(connId => {
+                const connSystem = gameState.systems[connId];
+                if (!connSystem) return null;
+                
+                return (
+                  <line
+                    key={`${system.id}-${connId}`}
+                    x1={system.x}
+                    y1={system.y}
+                    x2={connSystem.x}
+                    y2={connSystem.y}
+                    stroke="#4a5568"
+                    strokeWidth="1"
+                    opacity="0.6"
+                  />
+                );
+              })
+            )}
+            
+            {/* Draw systems */}
+            {systems.map(system => (
+              <g key={system.id}>
+                {/* System circle */}
                 <circle
-                  key={starfleet.id}
-                  cx={system.x + 10 + (index * 8)}
-                  cy={system.y - 10}
-                  r="4"
-                  fill={getPlayerColor(starfleet.owner)}
-                  stroke={selectedStarfleet === starfleet.id ? "#ffd700" : "#ffffff"}
-                  strokeWidth={selectedStarfleet === starfleet.id ? "2" : "1"}
-                  className="starfleet-node"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleStarfleetClick(starfleet.id, system.id);
-                  }}
+                  cx={system.x}
+                  cy={system.y}
+                  r={system.is_home_system ? "12" : "8"}
+                  fill={getPlayerColor(system.owner)}
+                  stroke={selectedSystem === system.id ? "#ffd700" : "#ffffff"}
+                  strokeWidth={selectedSystem === system.id ? "3" : system.is_home_system ? "2" : "1"}
+                  className="system-node"
+                  onClick={() => handleSystemClick(system.id)}
                   style={{ cursor: 'pointer' }}
                 />
-              ))}
-            </g>
-          ))}
+                
+                {/* System name */}
+                <text
+                  x={system.x}
+                  y={system.y - 18}
+                  fill="#ffffff"
+                  fontSize="10"
+                  textAnchor="middle"
+                  className="system-label"
+                >
+                  {system.name}
+                </text>
+                
+                {/* Resource indicators */}
+                <text
+                  x={system.x}
+                  y={system.y + 25}
+                  fill="#a0aec0"
+                  fontSize="8"
+                  textAnchor="middle"
+                  className="resource-label"
+                >
+                  T:{system.resources.tech} M:{system.resources.metals} C:{system.resources.chon}
+                </text>
+                
+                {/* Starfleet indicators */}
+                {system.starfleet_details && system.starfleet_details.map((starfleet, index) => (
+                  <circle
+                    key={starfleet.id}
+                    cx={system.x + 10 + (index * 8)}
+                    cy={system.y - 10}
+                    r="4"
+                    fill={getPlayerColor(starfleet.owner)}
+                    stroke={selectedStarfleet === starfleet.id ? "#ffd700" : "#ffffff"}
+                    strokeWidth={selectedStarfleet === starfleet.id ? "2" : "1"}
+                    className="starfleet-node"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStarfleetClick(starfleet.id, system.id);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </g>
+            ))}
+          </g>
         </svg>
       </div>
     );
