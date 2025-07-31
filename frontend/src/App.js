@@ -580,6 +580,22 @@ function App() {
               );
             })}
           </div>
+
+          <div className="support-section">
+            <p>Support attacks on:</p>
+            {system.connections.map(connId => {
+              const connSystem = gameState.systems[connId];
+              return (
+                <button
+                  key={`support_${connId}`}
+                  onClick={() => issueStarfleetOrder('support', connId)}
+                  className="order-btn support-btn"
+                >
+                  Support → {connSystem.name}
+                </button>
+              );
+            })}
+          </div>
         </div>
         
         {Object.keys(starfleetOrders).length > 0 && (
