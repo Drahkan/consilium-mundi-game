@@ -141,14 +141,15 @@ function App() {
   };
 
   // Issue starfleet order
-  const issueStarfleetOrder = (orderType, targetSystem = null) => {
+  const issueStarfleetOrder = (orderType, targetSystem = null, supportTarget = null) => {
     if (!selectedStarfleet) return;
 
     const newOrders = { ...starfleetOrders };
     newOrders[selectedStarfleet] = {
       starfleet_id: selectedStarfleet,
       order_type: orderType,
-      target_system: targetSystem
+      target_system: targetSystem,
+      support_target: supportTarget
     };
     
     setStarfleetOrders(newOrders);
