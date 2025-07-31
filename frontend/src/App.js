@@ -444,7 +444,60 @@ function App() {
     );
   };
 
-  // Render building panel
+  // Render combat reports
+  const renderCombatReports = () => {
+    if (!gameState || !gameState.combat_reports || !showCombatReports) return null;
+    
+    return (
+      <div className="combat-reports-panel">
+        <h4>Combat Reports</h4>
+        {gameState.combat_reports.slice(-5).map((report, index) => (
+          <div key={index} className="combat-report">
+            <div className="report-header">
+              <strong>Battle for {report.system}</strong>
+            </div>
+            <div className="report-details">
+              <p>Outcome: <span className={`outcome ${report.outcome.replace('_', '-')}`}>
+                {report.outcome.replace('_', ' ').toUpperCase()}
+              </span></p>
+              <div className="forces">
+                <div>Attackers: {Object.entries(report.attackers).map(([player, strength]) => 
+                  `${getPlayerName(player)}: ${strength}`).join(', ')}</div>
+                <div>Defenders: {report.defenders}</div>
+              </div>
+              {report.casualties.attackers.length > 0 && (
+                <p className="casualties">Attacker losses: {report.casualties.attackers.length}</p>
+              )}
+              {report.casualties.defenders.length > 0 && (
+                <p className="casualties">Defender losses: {report.casualties.defenders.length}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Render victory status
+  const renderVictoryStatus = () => {
+    if (!gameState || !gameState.victory_status) return null;
+    
+    const victory = gameState.victory_status;
+    const winnerName = getPlayerName(victory.winner);
+    
+    return (
+      <div className="victory-panel">
+        <div className="victory-header">
+          <h2>🏆 VICTORY! 🏆</h2>
+        </div>
+        <div className="victory-details">
+          <p><strong>{winnerName}</strong> has conquered the galaxy!</p>
+          <p>Systems controlled: {victory.systems_controlled}/{victory.total_systems}</p>
+          <p>Required for victory: {victory.required_systems}</p>
+        </div>
+      </div>
+    );
+  };
   const renderBuildingPanel = () => {
     if (!selectedSystem || !gameState || !showBuildPanel) return null;
     
