@@ -43,6 +43,12 @@ class JoinGameRequest(BaseModel):
     player_name: str
     game_id: str
 
+class StarfleetOrder(BaseModel):
+    starfleet_id: str
+    order_type: str  # move, hold, support, retreat
+    target_system: Optional[str] = None
+    support_target: Optional[str] = None
+
 # Galaxy Generation Classes
 class SolarSystem:
     def __init__(self, id: str, name: str, x: float, y: float):
@@ -51,7 +57,7 @@ class SolarSystem:
         self.x = x
         self.y = y
         self.owner = None
-        self.starfleets = []
+        self.starfleets = {}  # starfleet_id -> Starfleet object
         self.upgrades = []
         self.resources = {"tech": 0, "metals": 0, "chon": 0}
         self.connections = []  # List of connected system IDs
@@ -64,12 +70,16 @@ class Starfleet:
         self.system_id = system_id
         self.orders = None
         self.rally_point = None
+        self.strength = 1  # All starfleets have equal strength
 
 class GameEngine:
     def __init__(self, config: GameConfig):
         self.config = config
         self.systems = {}
+        self.starfleets = {}  # starfleet_id -> Starfleet object
         self.players = []
+        self.player_resources = {}  # player_id -> {tech: x, metals: y, chon: z}
+        self.player_orders = {}  # player_id -> [orders]
         self.current_turn = 1
         self.phase = "setup"  # setup, resource, upkeep, activity, resolution, trade, build
         self.turn_deadline = None
@@ -190,13 +200,264 @@ class GameEngine:
                 home_system = home_systems[i]
                 home_system.owner = player_id
                 
+                # Initialize player resources
+                self.player_resources[player_id] = {"tech": 3, "metals": 3, "chon": 3}
+                self.player_orders[player_id] = []
+                
                 # Create initial starfleet
                 starfleet = Starfleet(
                     id=f"fleet_{player_id}_0",
                     owner=player_id,
                     system_id=home_system.id
                 )
-                home_system.starfleets.append(starfleet.id)
+                
+                # Add to system and global registry
+                home_system.starfleets[starfleet.id] = starfleet
+                self.starfleets[starfleet.id] = starfleet
+                
+                # Add starport and shipyard to home system
+                home_system.upgrades = ["starport", "shipyard"]
+    
+    def submit_starfleet_orders(self, player_id: str, orders: List[StarfleetOrder]):
+        """Submit starfleet orders for a player"""
+        if self.phase != "activity":
+            raise ValueError("Can only submit orders during activity phase")
+        
+        # Validate and store orders
+        player_starfleets = [sf for sf in self.starfleets.values() if sf.owner == player_id]
+        
+        for order in orders:
+            # Find the starfleet
+            starfleet = self.starfleets.get(order.starfleet_id)
+            if not starfleet or starfleet.owner != player_id:
+                continue
+            
+            # Validate order
+            if order.order_type == "move":
+                # Check if target system is connected
+                current_system = self.systems[starfleet.system_id]
+                if order.target_system not in current_system.connections:
+                    continue
+            
+            # Store the order
+            starfleet.orders = {
+                "type": order.order_type,
+                "target": order.target_system,
+                "support_target": order.support_target
+            }
+    
+    def resolve_turn(self):
+        """Execute the full turn resolution according to Consilium Mundi rules"""
+        if self.phase != "activity":
+            return
+        
+        # Phase 1: Resource Phase
+        self.resource_phase()
+        
+        # Phase 2: Upkeep Phase  
+        self.upkeep_phase()
+        
+        # Phase 3: Resolution Phase
+        self.resolution_phase()
+        
+        # Phase 4: Build Phase
+        self.build_phase()
+        
+        # Advance turn
+        self.current_turn += 1
+        self.phase = "activity"
+        
+        # Clear orders for next turn
+        for starfleet in self.starfleets.values():
+            starfleet.orders = None
+    
+    def resource_phase(self):
+        """Phase 1: Collect resources from controlled systems"""
+        for player_id in self.players:
+            total_resources = {"tech": 0, "metals": 0, "chon": 0}
+            
+            # Sum up resources from all owned systems
+            for system in self.systems.values():
+                if system.owner == player_id:
+                    total_resources["tech"] += system.resources["tech"]
+                    total_resources["metals"] += system.resources["metals"]
+                    total_resources["chon"] += system.resources["chon"]
+                    
+                    # Add bonus from upgrades
+                    if "colony" in system.upgrades:
+                        total_resources["tech"] += 1
+                    if "mining_facilities" in system.upgrades:
+                        total_resources["metals"] += 1
+                        total_resources["chon"] += 1
+            
+            # Update player resources
+            self.player_resources[player_id] = total_resources
+    
+    def upkeep_phase(self):
+        """Phase 2: Pay upkeep for starfleets"""
+        for player_id in self.players:
+            player_starfleets = [sf for sf in self.starfleets.values() if sf.owner == player_id]
+            resources = self.player_resources[player_id]
+            
+            # Calculate upkeep cost (1 of each resource per starfleet)
+            upkeep_cost = len(player_starfleets)
+            
+            # Check if player can afford upkeep
+            if (resources["tech"] >= upkeep_cost and 
+                resources["metals"] >= upkeep_cost and 
+                resources["chon"] >= upkeep_cost):
+                
+                # Pay upkeep
+                resources["tech"] -= upkeep_cost
+                resources["metals"] -= upkeep_cost  
+                resources["chon"] -= upkeep_cost
+            else:
+                # Destroy starfleets that can't be maintained
+                self.destroy_unmaintainable_starfleets(player_id)
+    
+    def destroy_unmaintainable_starfleets(self, player_id: str):
+        """Destroy starfleets that can't be maintained due to insufficient resources"""
+        player_starfleets = [sf for sf in self.starfleets.values() if sf.owner == player_id]
+        resources = self.player_resources[player_id]
+        
+        # Calculate how many can be maintained
+        max_maintainable = min(resources["tech"], resources["metals"], resources["chon"])
+        to_destroy = len(player_starfleets) - max_maintainable
+        
+        if to_destroy > 0:
+            # Destroy farthest starfleets first (as per rules)
+            starfleets_by_distance = sorted(player_starfleets, 
+                                          key=lambda sf: self.calculate_supply_distance(sf),
+                                          reverse=True)
+            
+            for i in range(to_destroy):
+                starfleet = starfleets_by_distance[i]
+                self.destroy_starfleet(starfleet.id)
+            
+            # Pay upkeep for remaining starfleets
+            remaining = len(player_starfleets) - to_destroy
+            resources["tech"] = max(0, resources["tech"] - remaining)
+            resources["metals"] = max(0, resources["metals"] - remaining)
+            resources["chon"] = max(0, resources["chon"] - remaining)
+    
+    def calculate_supply_distance(self, starfleet: Starfleet) -> float:
+        """Calculate supply chain distance for starfleet destruction priority"""
+        # Simplified: just return distance from nearest home system
+        current_system = self.systems[starfleet.system_id]
+        home_systems = [s for s in self.systems.values() 
+                       if s.is_home_system and s.owner == starfleet.owner]
+        
+        min_distance = float('inf')
+        for home in home_systems:
+            dist = math.sqrt((current_system.x - home.x)**2 + (current_system.y - home.y)**2)
+            min_distance = min(min_distance, dist)
+        
+        return min_distance
+    
+    def resolution_phase(self):
+        """Phase 3: Resolve all starfleet movement and combat"""
+        movements = {}  # system_id -> list of incoming starfleets
+        
+        # Collect all movement orders
+        for starfleet in self.starfleets.values():
+            if starfleet.orders and starfleet.orders["type"] == "move":
+                target_system = starfleet.orders["target"]
+                if target_system not in movements:
+                    movements[target_system] = []
+                movements[target_system].append(starfleet)
+        
+        # Resolve each system with incoming movements
+        for system_id, incoming_starfleets in movements.items():
+            self.resolve_system_combat(system_id, incoming_starfleets)
+    
+    def resolve_system_combat(self, system_id: str, incoming_starfleets: List[Starfleet]):
+        """Resolve combat in a specific system"""
+        target_system = self.systems[system_id]
+        defending_starfleets = list(target_system.starfleets.values())
+        
+        # Group by owner
+        attacker_groups = {}
+        for starfleet in incoming_starfleets:
+            owner = starfleet.owner
+            if owner not in attacker_groups:
+                attacker_groups[owner] = []
+            attacker_groups[owner].append(starfleet)
+        
+        defender_owner = target_system.owner
+        defender_strength = len(defending_starfleets)
+        
+        # Add starport defense if present
+        if "starport" in target_system.upgrades:
+            defender_strength += 1
+        
+        # Calculate total attacking strength
+        total_attacker_strength = sum(len(group) for group in attacker_groups.values())
+        
+        # Determine combat outcome
+        if total_attacker_strength > defender_strength:
+            # Attackers win
+            
+            # Destroy defending starfleets
+            for starfleet in defending_starfleets:
+                self.destroy_starfleet(starfleet.id)
+            
+            # Destroy starport if present
+            if "starport" in target_system.upgrades:
+                target_system.upgrades.remove("starport")
+            
+            # Find strongest attacking player
+            strongest_attacker = max(attacker_groups.keys(), 
+                                   key=lambda owner: len(attacker_groups[owner]))
+            
+            # Transfer system ownership
+            target_system.owner = strongest_attacker
+            
+            # Move attacking starfleets to the system
+            for starfleet in incoming_starfleets:
+                if starfleet.owner == strongest_attacker:
+                    # Move starfleet to new system
+                    old_system = self.systems[starfleet.system_id]
+                    del old_system.starfleets[starfleet.id]
+                    
+                    starfleet.system_id = system_id
+                    target_system.starfleets[starfleet.id] = starfleet
+                else:
+                    # Other attackers retreat
+                    self.retreat_starfleet(starfleet)
+        
+        elif total_attacker_strength == defender_strength:
+            # Stalemate - all attacking starfleets retreat
+            for starfleet in incoming_starfleets:
+                self.retreat_starfleet(starfleet)
+        
+        else:
+            # Defenders win - attacking starfleets retreat
+            for starfleet in incoming_starfleets:
+                self.retreat_starfleet(starfleet)
+    
+    def retreat_starfleet(self, starfleet: Starfleet):
+        """Handle starfleet retreat"""
+        # For now, just keep it in current system
+        # TODO: Implement proper retreat logic with rally points
+        pass
+    
+    def destroy_starfleet(self, starfleet_id: str):
+        """Remove a starfleet from the game"""
+        if starfleet_id in self.starfleets:
+            starfleet = self.starfleets[starfleet_id]
+            
+            # Remove from system
+            system = self.systems[starfleet.system_id]
+            if starfleet_id in system.starfleets:
+                del system.starfleets[starfleet_id]
+            
+            # Remove from global registry
+            del self.starfleets[starfleet_id]
+    
+    def build_phase(self):
+        """Phase 4: Build new starfleets and upgrades"""
+        # TODO: Implement building system
+        pass
     
     def get_game_state(self, player_id: str = None):
         """Get current game state (optionally filtered for specific player)"""
@@ -213,12 +474,21 @@ class GameEngine:
                     "resources": s.resources,
                     "connections": s.connections,
                     "starfleets": len(s.starfleets),
+                    "starfleet_details": [
+                        {
+                            "id": sf.id,
+                            "owner": sf.owner,
+                            "orders": sf.orders
+                        }
+                        for sf in s.starfleets.values()
+                    ] if player_id else [],
                     "upgrades": s.upgrades,
                     "is_home_system": s.is_home_system
                 }
                 for sid, s in self.systems.items()
             },
             "players": self.players,
+            "player_resources": self.player_resources.get(player_id) if player_id else self.player_resources,
             "config": {
                 "num_players": self.config.num_players,
                 "galaxy_size": self.config.galaxy_size
@@ -306,6 +576,42 @@ async def get_game_players(game_id: str):
             game_players.append(players[pid])
     
     return {"players": game_players}
+
+@app.post("/api/game/{game_id}/orders")
+async def submit_orders(game_id: str, orders_data: Dict[str, Any]):
+    """Submit starfleet orders for a player"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = games[game_id]
+    player_id = orders_data.get("player_id")
+    orders = orders_data.get("orders", [])
+    
+    try:
+        # Convert dict orders to StarfleetOrder objects
+        starfleet_orders = []
+        for order in orders:
+            starfleet_orders.append(StarfleetOrder(**order))
+        
+        game.submit_starfleet_orders(player_id, starfleet_orders)
+        
+        return {"status": "orders_submitted", "count": len(orders)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/game/{game_id}/resolve-turn")
+async def resolve_turn(game_id: str):
+    """Resolve the current turn (for testing)"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = games[game_id]
+    
+    try:
+        game.resolve_turn()
+        return {"status": "turn_resolved", "new_turn": game.current_turn}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/game/{game_id}/action")
 async def submit_action(game_id: str, action: PlayerAction):

@@ -154,6 +154,11 @@ body {
   font-size: 0.9rem;
 }
 
+.resources-info {
+  color: #38a169;
+  margin-left: 1rem;
+}
+
 .testing-controls {
   display: flex;
   align-items: center;
@@ -174,7 +179,7 @@ body {
   font-size: 0.9rem;
 }
 
-.add-ai-btn {
+.add-ai-btn, .resolve-turn-btn {
   background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
   border: none;
   border-radius: 6px;
@@ -185,7 +190,11 @@ body {
   transition: all 0.3s ease;
 }
 
-.add-ai-btn:hover {
+.resolve-turn-btn {
+  background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+}
+
+.add-ai-btn:hover, .resolve-turn-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(56, 161, 105, 0.4);
 }
@@ -227,6 +236,15 @@ body {
   transform: scale(1.1);
 }
 
+.starfleet-node {
+  transition: all 0.3s ease;
+}
+
+.starfleet-node:hover {
+  filter: brightness(1.3);
+  transform: scale(1.2);
+}
+
 .system-label {
   font-weight: 500;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
@@ -245,6 +263,8 @@ body {
   padding: 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   height: fit-content;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .system-details {
@@ -286,9 +306,125 @@ body {
   margin-top: 0.5rem;
 }
 
+.starfleet-section {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1rem;
+}
+
+.starfleet-section h4 {
+  color: #4299e1;
+  margin-bottom: 0.5rem;
+}
+
+.starfleet-item {
+  background: rgba(45, 55, 72, 0.4);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.starfleet-item:hover {
+  background: rgba(45, 55, 72, 0.6);
+}
+
+.starfleet-item.selected {
+  border-color: #4299e1;
+  background: rgba(66, 153, 225, 0.2);
+}
+
+.starfleet-item p {
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.pending-order {
+  color: #d69e2e !important;
+  font-style: italic;
+}
+
+.orders-panel {
+  background: rgba(45, 55, 72, 0.6);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.orders-panel h4 {
+  color: #4299e1;
+  margin-bottom: 1rem;
+}
+
+.order-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.order-btn {
+  background: rgba(74, 85, 104, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.5rem;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.order-btn:hover {
+  background: rgba(74, 85, 104, 1);
+  border-color: #4299e1;
+}
+
+.hold-btn {
+  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+}
+
+.move-btn {
+  background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+}
+
+.move-section {
+  margin-top: 1rem;
+}
+
+.move-section p {
+  margin-bottom: 0.5rem;
+  color: #a0aec0;
+  font-size: 0.9rem;
+}
+
+.submit-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.submit-orders-btn {
+  background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1.5rem;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.submit-orders-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(214, 158, 46, 0.4);
+}
+
 .game-status {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 1.5rem;
+  margin-top: 2rem;
 }
 
 .game-status h4 {
@@ -341,6 +477,7 @@ body {
   
   .info-panel {
     width: 100%;
+    max-height: none;
   }
   
   .galaxy-container {

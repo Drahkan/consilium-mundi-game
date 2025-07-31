@@ -13,6 +13,8 @@ function App() {
   const [playerName, setPlayerName] = useState('');
   const [selectedSystem, setSelectedSystem] = useState(null);
   const [testingMode, setTestingMode] = useState(false);
+  const [selectedStarfleet, setSelectedStarfleet] = useState(null);
+  const [starfleetOrders, setStarfleetOrders] = useState({});
 
   // Create a new game
   const createGame = async () => {
@@ -59,7 +61,7 @@ function App() {
   // Load game state
   const loadGameState = async (gameId) => {
     try {
-      const response = await fetch(`${API_BASE}/api/game/${gameId}/state`);
+      const response = await fetch(`${API_BASE}/api/game/${gameId}/state?player_id=${currentPlayer}`);
       if (!response.ok) throw new Error('Failed to load game state');
       
       const data = await response.json();
@@ -112,11 +114,89 @@ function App() {
   const switchPlayer = (playerId) => {
     setCurrentPlayer(playerId);
     setSelectedSystem(null);
+    setSelectedStarfleet(null);
+    // Reload game state for new player
+    if (currentGame) {
+      loadGameState(currentGame);
+    }
   };
 
   // Handle system click
   const handleSystemClick = (systemId) => {
     setSelectedSystem(systemId);
+    setSelectedStarfleet(null);
+  };
+
+  // Handle starfleet click
+  const handleStarfleetClick = (starfleetId, systemId) => {
+    const system = gameState.systems[systemId];
+    const starfleet = system.starfleet_details.find(sf => sf.id === starfleetId);
+    
+    if (starfleet && starfleet.owner === currentPlayer) {
+      setSelectedStarfleet(starfleetId);
+      setSelectedSystem(systemId);
+    }
+  };
+
+  // Issue starfleet order
+  const issueStarfleetOrder = (orderType, targetSystem = null) => {
+    if (!selectedStarfleet) return;
+
+    const newOrders = { ...starfleetOrders };
+    newOrders[selectedStarfleet] = {
+      starfleet_id: selectedStarfleet,
+      order_type: orderType,
+      target_system: targetSystem
+    };
+    
+    setStarfleetOrders(newOrders);
+  };
+
+  // Submit all orders
+  const submitOrders = async () => {
+    if (!currentGame || !currentPlayer) return;
+
+    try {
+      const orders = Object.values(starfleetOrders);
+      
+      const response = await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_id: currentPlayer,
+          orders: orders
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to submit orders');
+
+      setStarfleetOrders({});
+      alert('Orders submitted successfully!');
+      
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Resolve turn (for testing)
+  const resolveTurn = async () => {
+    if (!currentGame) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/game/${currentGame}/resolve-turn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) throw new Error('Failed to resolve turn');
+
+      // Reload game state
+      await loadGameState(currentGame);
+      alert('Turn resolved!');
+      
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   // Get player color
@@ -125,6 +205,12 @@ function App() {
     const colors = ['#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20'];
     const playerIndex = availablePlayers.findIndex(p => p.id === playerId);
     return colors[playerIndex % colors.length];
+  };
+
+  // Get player name
+  const getPlayerName = (playerId) => {
+    const player = availablePlayers.find(p => p.id === playerId);
+    return player ? player.name : 'Unknown';
   };
 
   // Render galaxy map
@@ -210,17 +296,24 @@ function App() {
                 T:{system.resources.tech} M:{system.resources.metals} C:{system.resources.chon}
               </text>
               
-              {/* Starfleet indicator */}
-              {system.starfleets > 0 && (
+              {/* Starfleet indicators */}
+              {system.starfleet_details && system.starfleet_details.map((starfleet, index) => (
                 <circle
-                  cx={system.x + 10}
+                  key={starfleet.id}
+                  cx={system.x + 10 + (index * 8)}
                   cy={system.y - 10}
                   r="4"
-                  fill="#ffd700"
-                  stroke="#ffffff"
-                  strokeWidth="1"
+                  fill={getPlayerColor(starfleet.owner)}
+                  stroke={selectedStarfleet === starfleet.id ? "#ffd700" : "#ffffff"}
+                  strokeWidth={selectedStarfleet === starfleet.id ? "2" : "1"}
+                  className="starfleet-node"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStarfleetClick(starfleet.id, system.id);
+                  }}
+                  style={{ cursor: 'pointer' }}
                 />
-              )}
+              ))}
             </g>
           ))}
         </svg>
@@ -241,7 +334,7 @@ function App() {
         <div className="system-info">
           <p><strong>Owner:</strong> {
             system.owner 
-              ? availablePlayers.find(p => p.id === system.owner)?.name || 'Unknown'
+              ? getPlayerName(system.owner)
               : 'Uncontrolled'
           }</p>
           <p><strong>Resources per turn:</strong></p>
@@ -251,9 +344,84 @@ function App() {
             <li>CHON: {system.resources.chon}</li>
           </ul>
           <p><strong>Starfleets:</strong> {system.starfleets}</p>
-          <p><strong>Upgrades:</strong> {system.upgrades.length}</p>
+          <p><strong>Upgrades:</strong> {system.upgrades.join(', ') || 'None'}</p>
           {system.is_home_system && <p className="home-system-badge">Home System</p>}
+          
+          {/* Show starfleet details */}
+          {system.starfleet_details && system.starfleet_details.length > 0 && (
+            <div className="starfleet-section">
+              <h4>Starfleets:</h4>
+              {system.starfleet_details.map(starfleet => (
+                <div 
+                  key={starfleet.id} 
+                  className={`starfleet-item ${selectedStarfleet === starfleet.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedStarfleet(starfleet.id)}
+                >
+                  <p><strong>Owner:</strong> {getPlayerName(starfleet.owner)}</p>
+                  {starfleet.orders && (
+                    <p><strong>Orders:</strong> {starfleet.orders.type}</p>
+                  )}
+                  {starfleetOrders[starfleet.id] && (
+                    <p className="pending-order">
+                      <strong>Pending:</strong> {starfleetOrders[starfleet.id].order_type}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      </div>
+    );
+  };
+
+  // Render starfleet orders panel
+  const renderOrdersPanel = () => {
+    if (!selectedStarfleet || !gameState || !selectedSystem) return null;
+    
+    const system = gameState.systems[selectedSystem];
+    const starfleet = system.starfleet_details.find(sf => sf.id === selectedStarfleet);
+    
+    if (!starfleet || starfleet.owner !== currentPlayer) return null;
+    
+    return (
+      <div className="orders-panel">
+        <h4>Starfleet Orders</h4>
+        <p>Selected: {starfleet.id}</p>
+        
+        <div className="order-buttons">
+          <button 
+            onClick={() => issueStarfleetOrder('hold')}
+            className="order-btn hold-btn"
+          >
+            Hold Position
+          </button>
+          
+          <div className="move-section">
+            <p>Move to:</p>
+            {system.connections.map(connId => {
+              const connSystem = gameState.systems[connId];
+              return (
+                <button
+                  key={connId}
+                  onClick={() => issueStarfleetOrder('move', connId)}
+                  className="order-btn move-btn"
+                >
+                  {connSystem.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        
+        {Object.keys(starfleetOrders).length > 0 && (
+          <div className="submit-section">
+            <p>{Object.keys(starfleetOrders).length} orders pending</p>
+            <button onClick={submitOrders} className="submit-orders-btn">
+              Submit All Orders
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -299,7 +467,14 @@ function App() {
         <div className="game-header">
           <div className="game-info">
             <h2>Consilium Mundi</h2>
-            <span className="turn-info">Turn {gameState?.turn} - {gameState?.phase}</span>
+            <span className="turn-info">
+              Turn {gameState?.turn} - {gameState?.phase}
+              {gameState?.player_resources && (
+                <span className="resources-info">
+                  | T:{gameState.player_resources.tech} M:{gameState.player_resources.metals} C:{gameState.player_resources.chon}
+                </span>
+              )}
+            </span>
           </div>
           
           {/* Testing controls */}
@@ -323,6 +498,12 @@ function App() {
                   Add AI Players
                 </button>
               )}
+              
+              {gameState?.phase === 'activity' && (
+                <button onClick={resolveTurn} className="resolve-turn-btn">
+                  Resolve Turn
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -335,6 +516,7 @@ function App() {
           
           <div className="info-panel">
             {renderSystemDetails()}
+            {renderOrdersPanel()}
             
             {gameState && (
               <div className="game-status">
@@ -352,6 +534,8 @@ function App() {
                 </ul>
               </div>
             )}
+            
+            {error && <div className="error-message">{error}</div>}
           </div>
         </div>
       </div>
