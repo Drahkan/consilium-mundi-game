@@ -430,7 +430,107 @@ function App() {
     );
   };
 
-  // Render starfleet orders panel
+  // Render building panel
+  const renderBuildingPanel = () => {
+    if (!selectedSystem || !gameState || !showBuildPanel) return null;
+    
+    const system = gameState.systems[selectedSystem];
+    if (!system || system.owner !== currentPlayer) return null;
+    
+    const resources = gameState.player_resources || {};
+    
+    const buildOptions = [
+      {
+        type: 'starfleet',
+        name: 'Starfleet',
+        cost: { tech: 1, metals: 1, chon: 1 },
+        requirement: 'shipyard',
+        canBuild: system.upgrades.includes('shipyard')
+      },
+      {
+        type: 'starport',
+        name: 'Starport',
+        cost: { tech: 2, metals: 2, chon: 2 },
+        requirement: null,
+        canBuild: !system.upgrades.includes('starport')
+      },
+      {
+        type: 'shipyard',
+        name: 'Shipyard',
+        cost: { tech: 3, metals: 3, chon: 1 },
+        requirement: null,
+        canBuild: !system.upgrades.includes('shipyard')
+      },
+      {
+        type: 'colony',
+        name: 'Colony',
+        cost: { tech: 0, metals: 2, chon: 2 },
+        requirement: null,
+        canBuild: !system.upgrades.includes('colony')
+      },
+      {
+        type: 'mining_facilities',
+        name: 'Mining Facilities',
+        cost: { tech: 2, metals: 2, chon: 1 },
+        requirement: null,
+        canBuild: !system.upgrades.includes('mining_facilities')
+      },
+      {
+        type: 'wormhole_generator',
+        name: 'Wormhole Generator',
+        cost: { tech: 6, metals: 2, chon: 0 },
+        requirement: null,
+        canBuild: !system.upgrades.includes('wormhole_generator')
+      }
+    ];
+    
+    return (
+      <div className="building-panel">
+        <h4>Construction</h4>
+        <p>Build in: {system.name}</p>
+        
+        <div className="build-options">
+          {buildOptions.map(option => {
+            const canAfford = resources.tech >= option.cost.tech &&
+                             resources.metals >= option.cost.metals &&
+                             resources.chon >= option.cost.chon;
+            
+            const isDisabled = !option.canBuild || !canAfford;
+            
+            return (
+              <div key={option.type} className="build-option">
+                <div className="build-info">
+                  <strong>{option.name}</strong>
+                  <div className="build-cost">
+                    Cost: T:{option.cost.tech} M:{option.cost.metals} C:{option.cost.chon}
+                  </div>
+                  {option.requirement && (
+                    <div className="build-requirement">
+                      Requires: {option.requirement}
+                    </div>
+                  )}
+                </div>
+                
+                <button
+                  onClick={() => issueBuildOrder(option.type, selectedSystem)}
+                  disabled={isDisabled}
+                  className={`build-btn ${isDisabled ? 'disabled' : ''}`}
+                >
+                  Build
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        
+        {Object.keys(buildOrders).length > 0 && (
+          <div className="build-queue">
+            <p>{Object.keys(buildOrders).length} build orders pending</p>
+          </div>
+        )}
+      </div>
+    );
+  };
   const renderOrdersPanel = () => {
     if (!selectedStarfleet || !gameState || !selectedSystem) return null;
     
