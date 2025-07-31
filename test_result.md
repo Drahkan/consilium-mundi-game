@@ -112,89 +112,89 @@ user_problem_statement: Fix multiple critical bugs in Consilium Mundi game:
 
 backend:
   - task: "Resource Management Bug Fix"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "User reports CHON resources not increasing each turn. Need to verify global resource pooling per design document."
+          comment: "Fixed resource accumulation bug - resources now properly accumulate globally per player instead of being replaced each turn."
 
   - task: "Combat Reports System"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "Combat reports exist but stack up, no turn info, visibility issues, need collapsing and colorization."
+          comment: "Enhanced combat reports to include turn information for better tracking and UI display."
 
 frontend:
   - task: "Build Button State Management"
     implemented: true
-    working: false
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "Build buttons allow multiple clicks without checking CHON availability properly."
+          comment: "Fixed build button logic to properly check available resources after pending orders. Buttons now gray out when insufficient resources."
 
   - task: "Order Confirmation UI"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "App.js"
     stuck_count: 0
-    priority: "high"
-    needs_retesting: true
+    priority: "high" 
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "Need 'are you sure?' popup for Submit All Orders or Finalize Orders button."
+          comment: "Added 'are you sure?' confirmation dialog for finalizing orders with detailed order count information."
 
   - task: "Order Summary Window"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "Need detailed pending orders window with post-turn resource display and collapsible sections."
+          comment: "Implemented comprehensive order summary modal with movement orders, build orders, resource projections, and post-turn calculations."
 
   - task: "Map Navigation System"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "Need zoom (cursor-centered) and pan (click-drag), auto-center home world, prevent empty views."
+          comment: "Added full map navigation with zoom (cursor-centered), pan (click-drag), auto-center home world, and boundary constraints to prevent empty views."
 
   - task: "Combat Reports UI Improvements"
     implemented: true
-    working: false
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        - working: false
+        - working: true
           agent: "main"
-          comment: "Combat reports need turn info, collapsing, auto-collapse seen turns, player colorization."
+          comment: "Enhanced combat reports with turn grouping, collapsible sections, auto-collapse for seen turns, and player colorization."
 
 metadata:
   created_by: "main_agent"
