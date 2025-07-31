@@ -608,6 +608,31 @@ class GameEngine:
                 
                 resources["tech"] -= 6
                 resources["metals"] -= 2
+                system.upgrades.append("wormhole_generator")
+    
+    def check_victory_condition(self):
+        """Check if any player has won the game"""
+        if not self.systems:
+            return None
+        
+        total_systems = len(self.systems)
+        required_systems = (total_systems // 2) + 1  # More than 50%
+        
+        player_system_counts = {}
+        for system in self.systems.values():
+            if system.owner:
+                player_system_counts[system.owner] = player_system_counts.get(system.owner, 0) + 1
+        
+        for player_id, count in player_system_counts.items():
+            if count >= required_systems:
+                return {
+                    "winner": player_id,
+                    "systems_controlled": count,
+                    "total_systems": total_systems,
+                    "required_systems": required_systems
+                }
+        
+        return None
     def submit_espionage_orders(self, player_id: str, orders: List[Dict[str, Any]]):
         """Submit espionage orders for a player"""
         if self.phase != "activity":
