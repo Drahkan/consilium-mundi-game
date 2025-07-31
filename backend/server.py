@@ -308,38 +308,6 @@ class GameEngine:
                 else:
                     break
     
-    def generate_connections(self, systems):
-        """Generate wormhole connections between systems"""
-        # Create a distance matrix
-        distances = {}
-        for i, sys1 in enumerate(systems):
-            for j, sys2 in enumerate(systems):
-                if i != j:
-                    dist = math.sqrt((sys1.x - sys2.x)**2 + (sys1.y - sys2.y)**2)
-                    distances[(sys1.id, sys2.id)] = dist
-        
-        # Connect each system to its nearest neighbors
-        for system in systems:
-            # Find nearest systems
-            nearest = sorted(
-                [s for s in systems if s.id != system.id],
-                key=lambda s: distances[(system.id, s.id)]
-            )
-            
-            # Home systems connect to 4 others, regular systems 3-5
-            if system.is_home_system:
-                target_connections = 4
-            else:
-                target_connections = random.randint(3, 5)
-            
-            # Connect to nearest systems
-            for neighbor in nearest[:target_connections]:
-                if neighbor.id not in system.connections:
-                    system.connections.append(neighbor.id)
-                    # Make connections bidirectional
-                    if system.id not in neighbor.connections:
-                        neighbor.connections.append(system.id)
-    
     def create_initial_starfleets(self):
         """Create starting starfleets for each player"""
         home_systems = [s for s in self.systems.values() if s.is_home_system]
