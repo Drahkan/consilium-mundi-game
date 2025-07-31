@@ -251,25 +251,30 @@ class GameEngine:
         if self.phase != "activity":
             return
         
-        # Phase 1: Resource Phase
-        self.resource_phase()
-        
-        # Phase 2: Upkeep Phase  
-        self.upkeep_phase()
-        
-        # Phase 3: Resolution Phase
-        self.resolution_phase()
-        
-        # Phase 4: Build Phase
-        self.build_phase()
-        
-        # Advance turn
-        self.current_turn += 1
-        self.phase = "activity"
-        
-        # Clear orders for next turn
-        for starfleet in self.starfleets.values():
-            starfleet.orders = None
+        try:
+            # Phase 1: Resource Phase
+            self.resource_phase()
+            
+            # Phase 2: Upkeep Phase  
+            self.upkeep_phase()
+            
+            # Phase 3: Resolution Phase
+            self.resolution_phase()
+            
+            # Phase 4: Build Phase
+            self.build_phase()
+            
+            # Advance turn
+            self.current_turn += 1
+            self.phase = "activity"
+            
+            # Clear orders for next turn
+            for starfleet in self.starfleets.values():
+                starfleet.orders = None
+        except Exception as e:
+            print(f"Turn resolution error: {e}")
+            # Continue anyway to prevent game from getting stuck
+            self.current_turn += 1
     
     def resource_phase(self):
         """Phase 1: Collect resources from controlled systems"""
