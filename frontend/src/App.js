@@ -1211,6 +1211,7 @@ function App() {
             {renderBuildingPanel()}
             {renderCombatReports()}
             {renderOrdersPanel()}
+            {renderOrderSummary()}
             
             {(Object.keys(starfleetOrders).length > 0 || Object.keys(buildOrders).length > 0) && (
               <div className="global-submit-section">
