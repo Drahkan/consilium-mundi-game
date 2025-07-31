@@ -101,3 +101,116 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Fix multiple critical bugs in Consilium Mundi game:
+1. Systems do not increase CHON each turn - resource pooling unclear
+2. Combat Reports window stacking and visibility issues
+3. Build buttons allow multiple clicks without enough CHON
+4. Need order confirmation popup ("are you sure?")
+5. Need detailed pending orders window with summary
+6. Need map navigation (zoom/pan, center home world)
+
+backend:
+  - task: "Resource Management Bug Fix"
+    implemented: false
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "User reports CHON resources not increasing each turn. Need to verify global resource pooling per design document."
+
+  - task: "Combat Reports System"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Combat reports exist but stack up, no turn info, visibility issues, need collapsing and colorization."
+
+frontend:
+  - task: "Build Button State Management"
+    implemented: true
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Build buttons allow multiple clicks without checking CHON availability properly."
+
+  - task: "Order Confirmation UI"
+    implemented: false
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Need 'are you sure?' popup for Submit All Orders or Finalize Orders button."
+
+  - task: "Order Summary Window"
+    implemented: false
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Need detailed pending orders window with post-turn resource display and collapsible sections."
+
+  - task: "Map Navigation System"
+    implemented: false
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Need zoom (cursor-centered) and pan (click-drag), auto-center home world, prevent empty views."
+
+  - task: "Combat Reports UI Improvements"
+    implemented: true
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Combat reports need turn info, collapsing, auto-collapse seen turns, player colorization."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Resource Management Bug Fix"
+    - "Build Button State Management"
+    - "Combat Reports UI Improvements"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Starting implementation of critical bug fixes based on user feedback. Priority on resource management and UI state issues."
