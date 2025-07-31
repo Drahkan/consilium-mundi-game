@@ -539,6 +539,7 @@ class GameEngine:
                 # Create combat report for automatic capture
                 combat_report = {
                     "system": target_system.name,
+                    "turn": self.current_turn,
                     "attackers": {owner: len(group) for owner, group in attacker_groups.items()},
                     "defenders": 0,
                     "outcome": "automatic_capture",
