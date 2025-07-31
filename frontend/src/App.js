@@ -182,6 +182,35 @@ function App() {
     }
   };
 
+  // Calculate available resources after pending build orders
+  const calculateAvailableResources = () => {
+    if (!gameState || !gameState.player_resources) return { tech: 0, metals: 0, chon: 0 };
+    
+    const currentResources = { ...gameState.player_resources };
+    
+    // Subtract costs of pending build orders
+    Object.values(buildOrders).forEach(order => {
+      const buildType = order.build_type;
+      const buildOptions = [
+        { type: 'starfleet', cost: { tech: 1, metals: 1, chon: 1 } },
+        { type: 'starport', cost: { tech: 2, metals: 2, chon: 2 } },
+        { type: 'shipyard', cost: { tech: 3, metals: 3, chon: 1 } },
+        { type: 'colony', cost: { tech: 0, metals: 2, chon: 2 } },
+        { type: 'mining_facilities', cost: { tech: 2, metals: 2, chon: 1 } },
+        { type: 'wormhole_generator', cost: { tech: 6, metals: 2, chon: 0 } }
+      ];
+      
+      const option = buildOptions.find(opt => opt.type === buildType);
+      if (option) {
+        currentResources.tech -= option.cost.tech;
+        currentResources.metals -= option.cost.metals;
+        currentResources.chon -= option.cost.chon;
+      }
+    });
+    
+    return currentResources;
+  };
+
   // Issue build order
   const issueBuildOrder = (buildType, systemId) => {
     const newOrders = { ...buildOrders };
@@ -190,13 +219,37 @@ function App() {
     // If this build order already exists, remove it (toggle behavior)
     if (newOrders[orderId]) {
       delete newOrders[orderId];
-    } else {
-      newOrders[orderId] = {
-        type: "build",
-        build_type: buildType,
-        system_id: systemId
-      };
+      setBuildOrders(newOrders);
+      return;
     }
+
+    // Check if player can afford this build order
+    const availableResources = calculateAvailableResources();
+    const buildCosts = {
+      'starfleet': { tech: 1, metals: 1, chon: 1 },
+      'starport': { tech: 2, metals: 2, chon: 2 },
+      'shipyard': { tech: 3, metals: 3, chon: 1 },
+      'colony': { tech: 0, metals: 2, chon: 2 },
+      'mining_facilities': { tech: 2, metals: 2, chon: 1 },
+      'wormhole_generator': { tech: 6, metals: 2, chon: 0 }
+    };
+    
+    const cost = buildCosts[buildType];
+    if (cost && (
+      availableResources.tech < cost.tech ||
+      availableResources.metals < cost.metals ||
+      availableResources.chon < cost.chon
+    )) {
+      // Can't afford this build order
+      return;
+    }
+
+    // Add the build order
+    newOrders[orderId] = {
+      type: "build",
+      build_type: buildType,
+      system_id: systemId
+    };
     
     setBuildOrders(newOrders);
   };
