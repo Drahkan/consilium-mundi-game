@@ -228,21 +228,21 @@ body {
 }
 
 .system-node {
-  transition: all 0.3s ease;
+  transition: filter 0.2s ease;
+  cursor: pointer;
 }
 
 .system-node:hover {
   filter: brightness(1.3);
-  transform: scale(1.1);
 }
 
 .starfleet-node {
-  transition: all 0.3s ease;
+  transition: filter 0.2s ease;
+  cursor: pointer;
 }
 
 .starfleet-node:hover {
   filter: brightness(1.3);
-  transform: scale(1.2);
 }
 
 .system-label {
