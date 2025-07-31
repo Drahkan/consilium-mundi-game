@@ -388,6 +388,20 @@ body {
   background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
 }
 
+.support-btn {
+  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+}
+
+.support-section {
+  margin-top: 1rem;
+}
+
+.support-section p {
+  margin-bottom: 0.5rem;
+  color: #a0aec0;
+  font-size: 0.9rem;
+}
+
 .move-section {
   margin-top: 1rem;
 }
