@@ -535,32 +535,106 @@ function App() {
   const renderCombatReports = () => {
     if (!gameState || !gameState.combat_reports || !showCombatReports) return null;
     
+    // Group reports by turn
+    const reportsByTurn = {};
+    gameState.combat_reports.forEach((report, index) => {
+      const turn = report.turn || 'Unknown';
+      if (!reportsByTurn[turn]) {
+        reportsByTurn[turn] = [];
+      }
+      reportsByTurn[turn].push({ ...report, index });
+    });
+    
+    // Auto-expand current turn, collapse seen turns
+    const currentTurn = gameState.turn;
+    
+    const toggleTurnExpansion = (turn) => {
+      setCombatReportsExpanded(prev => ({
+        ...prev,
+        [turn]: !prev[turn]
+      }));
+      
+      // Mark turn as seen
+      setSeenCombatTurns(prev => new Set([...prev, turn]));
+    };
+    
+    const getOutcomeColor = (outcome) => {
+      switch (outcome) {
+        case 'attacker_victory': return 'text-red-400';
+        case 'defender_victory': return 'text-blue-400';
+        case 'stalemate': return 'text-yellow-400';
+        case 'automatic_capture': return 'text-green-400';
+        default: return 'text-gray-400';
+      }
+    };
+    
     return (
       <div className="combat-reports-panel">
         <h4>Combat Reports</h4>
-        {gameState.combat_reports.slice(-5).map((report, index) => (
-          <div key={index} className="combat-report">
-            <div className="report-header">
-              <strong>Battle for {report.system}</strong>
-            </div>
-            <div className="report-details">
-              <p>Outcome: <span className={`outcome ${report.outcome.replace('_', '-')}`}>
-                {report.outcome.replace('_', ' ').toUpperCase()}
-              </span></p>
-              <div className="forces">
-                <div>Attackers: {Object.entries(report.attackers).map(([player, strength]) => 
-                  `${getPlayerName(player)}: ${strength}`).join(', ')}</div>
-                <div>Defenders: {report.defenders}</div>
+        {Object.entries(reportsByTurn)
+          .sort(([a], [b]) => Number(b) - Number(a)) // Newest first
+          .map(([turn, reports]) => {
+            const isCurrentTurn = Number(turn) === currentTurn;
+            const isSeen = seenCombatTurns.has(turn);
+            const isExpanded = combatReportsExpanded[turn] !== false && (isCurrentTurn || !isSeen);
+            
+            return (
+              <div key={turn} className="combat-turn-section">
+                <div 
+                  className="turn-header cursor-pointer flex justify-between items-center p-2 bg-gray-800 rounded"
+                  onClick={() => toggleTurnExpansion(turn)}
+                >
+                  <span className={`font-bold ${isCurrentTurn ? 'text-yellow-400' : 'text-gray-300'}`}>
+                    Turn {turn} ({reports.length} battle{reports.length !== 1 ? 's' : ''})
+                  </span>
+                  <span>{isExpanded ? '▼' : '▶'}</span>
+                </div>
+                
+                {isExpanded && (
+                  <div className="turn-reports mt-2">
+                    {reports.map(report => (
+                      <div key={report.index} className="combat-report mb-4 p-3 bg-gray-900 rounded">
+                        <div className="report-header">
+                          <strong>Battle for {report.system}</strong>
+                        </div>
+                        <div className="report-details mt-2">
+                          <p>
+                            Outcome: <span className={`font-bold ${getOutcomeColor(report.outcome)}`}>
+                              {report.outcome.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </p>
+                          <div className="forces mt-2">
+                            <div>
+                              Attackers: {Object.entries(report.attackers).map(([playerId, strength]) => (
+                                <span key={playerId} style={{ color: getPlayerColor(playerId) }} className="mr-2">
+                                  {getPlayerName(playerId)}: {strength}
+                                </span>
+                              ))}
+                            </div>
+                            <div>
+                              <span style={{ color: getPlayerColor(gameState.systems[report.system]?.owner || null) }}>
+                                Defenders: {report.defenders}
+                              </span>
+                            </div>
+                          </div>
+                          {(report.casualties.attackers.length > 0 || report.casualties.defenders.length > 0) && (
+                            <div className="casualties mt-2">
+                              {report.casualties.attackers.length > 0 && (
+                                <p className="text-red-400">Attacker losses: {report.casualties.attackers.length}</p>
+                              )}
+                              {report.casualties.defenders.length > 0 && (
+                                <p className="text-red-400">Defender losses: {report.casualties.defenders.length}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {report.casualties.attackers.length > 0 && (
-                <p className="casualties">Attacker losses: {report.casualties.attackers.length}</p>
-              )}
-              {report.casualties.defenders.length > 0 && (
-                <p className="casualties">Defender losses: {report.casualties.defenders.length}</p>
-              )}
-            </div>
-          </div>
-        ))}
+            );
+          })}
       </div>
     );
   };
