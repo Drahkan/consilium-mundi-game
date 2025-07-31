@@ -154,14 +154,28 @@ function App() {
     setStarfleetOrders(newOrders);
   };
 
-  // Submit all orders
-  const submitOrders = async () => {
+  // Issue build order
+  const issueBuildOrder = (buildType, systemId) => {
+    const newOrders = { ...buildOrders };
+    const orderId = `${systemId}_${buildType}`;
+    
+    newOrders[orderId] = {
+      type: "build",
+      build_type: buildType,
+      system_id: systemId
+    };
+    
+    setBuildOrders(newOrders);
+  };
+
+  // Submit build orders
+  const submitBuildOrders = async () => {
     if (!currentGame || !currentPlayer) return;
 
     try {
-      const orders = Object.values(starfleetOrders);
+      const orders = Object.values(buildOrders);
       
-      const response = await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
+      const response = await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,13 +184,26 @@ function App() {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to submit orders');
+      if (!response.ok) throw new Error('Failed to submit build orders');
 
-      setStarfleetOrders({});
-      alert('Orders submitted successfully!');
+      setBuildOrders({});
+      alert('Build orders submitted successfully!');
       
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  // Submit all orders (both movement and build)
+  const submitAllOrders = async () => {
+    // Submit starfleet orders first
+    if (Object.keys(starfleetOrders).length > 0) {
+      await submitOrders();
+    }
+    
+    // Submit build orders
+    if (Object.keys(buildOrders).length > 0) {
+      await submitBuildOrders();
     }
   };
 
