@@ -229,14 +229,24 @@ function App() {
 
   // Submit all orders (both movement and build)
   const submitAllOrders = async () => {
-    // Submit starfleet orders first
-    if (Object.keys(starfleetOrders).length > 0) {
-      await submitOrders();
-    }
+    let success = true;
     
-    // Submit build orders
-    if (Object.keys(buildOrders).length > 0) {
-      await submitBuildOrders();
+    try {
+      // Submit starfleet orders first
+      if (Object.keys(starfleetOrders).length > 0) {
+        await submitOrders();
+      }
+      
+      // Submit build orders
+      if (Object.keys(buildOrders).length > 0) {
+        await submitBuildOrders();
+      }
+      
+      if (success) {
+        alert(`Orders submitted for ${getPlayerName(currentPlayer)}!`);
+      }
+    } catch (err) {
+      setError(err.message);
     }
   };
 
