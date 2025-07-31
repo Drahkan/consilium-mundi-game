@@ -532,6 +532,11 @@ body {
   opacity: 0.5;
 }
 
+.build-btn.selected {
+  background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+  border: 2px solid #ffd700;
+}
+
 .build-queue {
   margin-top: 1rem;
   padding-top: 1rem;
