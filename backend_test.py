@@ -406,28 +406,103 @@ class ConsiliumMundiAPITester:
         
         return success
 
-    def test_turn_resolution(self):
-        """Test turn resolution"""
-        if not self.game_id:
-            print("❌ No game ID available for testing")
+    def test_combat_reports(self):
+        """Test combat reports system with turn information"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
             return False
         
-        # Get current turn number
+        print("\n🔍 Testing Combat Reports System...")
+        
+        # Test 1: Create a combat scenario by moving starfleets
         success, game_state = self.run_test(
-            "Get Game State Before Turn Resolution",
+            "Get Game State for Combat Setup",
             "GET",
-            f"api/game/{self.game_id}/state",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
             200
         )
         
         if not success:
             return False
         
+        # Find our starfleets and enemy systems
+        our_starfleets = []
+        enemy_systems = []
+        
+        for system_id, system in game_state.get('systems', {}).items():
+            if system.get('owner') == self.player_id:
+                for starfleet in system.get('starfleet_details', []):
+                    if starfleet.get('owner') == self.player_id:
+                        our_starfleets.append({
+                            'id': starfleet['id'],
+                            'system_id': system_id,
+                            'connections': system.get('connections', [])
+                        })
+            elif system.get('owner') and system.get('owner') != self.player_id:
+                enemy_systems.append(system_id)
+        
+        print(f"   Found {len(our_starfleets)} our starfleets")
+        print(f"   Found {len(enemy_systems)} enemy systems")
+        
+        # Test 2: Create movement orders to trigger combat
+        combat_orders = []
+        target_system = None
+        
+        for starfleet in our_starfleets:
+            for connection in starfleet['connections']:
+                if connection in enemy_systems:
+                    combat_orders.append({
+                        "starfleet_id": starfleet['id'],
+                        "order_type": "move",
+                        "target_system": connection
+                    })
+                    target_system = connection
+                    break
+            if combat_orders:
+                break
+        
+        # If no enemy systems adjacent, try uncontrolled systems for automatic capture test
+        if not combat_orders:
+            print("   No enemy systems adjacent, testing automatic capture...")
+            for starfleet in our_starfleets:
+                for connection in starfleet['connections']:
+                    conn_system = game_state['systems'].get(connection)
+                    if conn_system and not conn_system.get('owner'):
+                        combat_orders.append({
+                            "starfleet_id": starfleet['id'],
+                            "order_type": "move",
+                            "target_system": connection
+                        })
+                        target_system = connection
+                        break
+                if combat_orders:
+                    break
+        
+        if not combat_orders:
+            print("❌ No valid combat scenarios could be created")
+            return False
+        
+        # Submit combat orders
+        success, response = self.run_test(
+            "Submit Combat Orders",
+            "POST",
+            f"api/game/{self.game_id}/orders",
+            200,
+            data={
+                "player_id": self.player_id,
+                "orders": combat_orders
+            }
+        )
+        
+        if not success:
+            return False
+        
+        # Test 3: Resolve turn to trigger combat
         current_turn = game_state.get('turn', 1)
-        print(f"   Current turn: {current_turn}")
+        print(f"   Current turn before combat: {current_turn}")
         
         success, response = self.run_test(
-            "Resolve Turn",
+            "Resolve Turn for Combat",
             "POST",
             f"api/game/{self.game_id}/resolve-turn",
             200
@@ -436,14 +511,59 @@ class ConsiliumMundiAPITester:
         if not success:
             return False
         
-        # Verify turn advanced
         new_turn = response.get('new_turn', current_turn)
-        if new_turn > current_turn:
-            print(f"   Turn advanced to: {new_turn}")
-            return True
-        else:
-            print(f"❌ Turn did not advance (still {current_turn})")
+        print(f"   Turn after combat resolution: {new_turn}")
+        
+        # Test 4: Check combat reports were created with turn information
+        success, post_combat_state = self.run_test(
+            "Get Game State After Combat",
+            "GET",
+            f"api/game/{self.game_id}/state",
+            200
+        )
+        
+        if not success:
             return False
+        
+        combat_reports = post_combat_state.get('combat_reports', [])
+        print(f"   Found {len(combat_reports)} combat reports")
+        
+        if len(combat_reports) == 0:
+            print("❌ No combat reports generated")
+            return False
+        
+        # Test 5: Verify combat reports have turn information
+        latest_report = combat_reports[-1]  # Get the most recent report
+        
+        required_fields = ['system', 'turn', 'attackers', 'defenders', 'outcome', 'casualties']
+        for field in required_fields:
+            if field not in latest_report:
+                print(f"❌ Combat report missing required field: {field}")
+                return False
+        
+        report_turn = latest_report.get('turn')
+        if report_turn != current_turn:
+            print(f"❌ Combat report turn mismatch. Expected {current_turn}, got {report_turn}")
+            return False
+        
+        print(f"   ✅ Combat report has correct turn information: {report_turn}")
+        print(f"   Combat report details:")
+        print(f"     System: {latest_report.get('system')}")
+        print(f"     Outcome: {latest_report.get('outcome')}")
+        print(f"     Attackers: {latest_report.get('attackers')}")
+        print(f"     Defenders: {latest_report.get('defenders')}")
+        
+        # Test 6: Verify different combat scenarios
+        outcome = latest_report.get('outcome')
+        valid_outcomes = ['automatic_capture', 'attacker_victory', 'defender_victory', 'stalemate']
+        
+        if outcome not in valid_outcomes:
+            print(f"❌ Invalid combat outcome: {outcome}")
+            return False
+        
+        print(f"   ✅ Valid combat outcome: {outcome}")
+        
+        return True
 
     def test_resource_management(self):
         """Test resource collection and management - comprehensive test for bug fix"""
