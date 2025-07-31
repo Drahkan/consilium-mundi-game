@@ -485,6 +485,11 @@ def main():
         tester.test_get_game_players,
         tester.test_join_game,
         tester.test_game_state_after_full_game,
+        tester.test_resource_management,
+        tester.test_starfleet_orders,
+        tester.test_build_orders,
+        tester.test_espionage_orders,
+        tester.test_turn_resolution,
         tester.test_submit_action,
         tester.test_list_games
     ]
