@@ -1214,12 +1214,17 @@ function App() {
             
             {(Object.keys(starfleetOrders).length > 0 || Object.keys(buildOrders).length > 0) && (
               <div className="global-submit-section">
-                <p>
-                  {Object.keys(starfleetOrders).length} movement orders, {Object.keys(buildOrders).length} build orders pending
-                </p>
-                <button onClick={submitAllOrders} className="submit-all-orders-btn">
-                  Finalize Orders
-                </button>
+                <div className="order-actions">
+                  <button 
+                    onClick={() => setShowOrderSummary(true)}
+                    className="order-summary-btn"
+                  >
+                    Review Orders ({Object.keys(starfleetOrders).length + Object.keys(buildOrders).length})
+                  </button>
+                  <button onClick={submitAllOrders} className="submit-all-orders-btn">
+                    Finalize Orders
+                  </button>
+                </div>
               </div>
             )}
             
