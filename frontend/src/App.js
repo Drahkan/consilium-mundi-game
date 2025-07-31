@@ -20,6 +20,7 @@ function App() {
   const [showCombatReports, setShowCombatReports] = useState(false);
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
+  const [showOrderSummary, setShowOrderSummary] = useState(false);
 
   // Create a new game
   const createGame = async () => {
