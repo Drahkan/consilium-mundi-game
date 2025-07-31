@@ -801,6 +801,8 @@ async def submit_espionage_orders(game_id: str, espionage_data: Dict[str, Any]):
         return {"status": "espionage_orders_submitted", "count": len(orders)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/game/{game_id}/build-orders")
 async def submit_build_orders(game_id: str, build_data: Dict[str, Any]):
     """Submit build orders for a player"""
     if game_id not in games:
@@ -815,6 +817,8 @@ async def submit_build_orders(game_id: str, build_data: Dict[str, Any]):
         return {"status": "build_orders_submitted", "count": len(orders)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/game/{game_id}/resolve-turn")
 async def resolve_turn(game_id: str):
     """Resolve the current turn (for testing)"""
     if game_id not in games:
