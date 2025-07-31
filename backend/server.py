@@ -548,7 +548,84 @@ class GameEngine:
                 
                 resources["tech"] -= 6
                 resources["metals"] -= 2
-                system.upgrades.append("wormhole_generator")
+    def submit_espionage_orders(self, player_id: str, orders: List[Dict[str, Any]]):
+        """Submit espionage orders for a player"""
+        if self.phase != "activity":
+            raise ValueError("Can only submit espionage orders during activity phase")
+        
+        resources = self.player_resources[player_id]
+        
+        for order in orders:
+            espionage_type = order.get("espionage_type")
+            target_system = order.get("target_system")
+            
+            # Check if player has enough Tech resources (each espionage costs 1 Tech)
+            if resources["tech"] >= 1:
+                resources["tech"] -= 1
+                
+                # Store espionage order for resolution phase
+                if player_id not in self.player_orders:
+                    self.player_orders[player_id] = []
+                
+                self.player_orders[player_id].append({
+                    "type": "espionage",
+                    "espionage_type": espionage_type,
+                    "target_system": target_system,
+                    "target_player": order.get("target_player")
+                })
+    
+    def resolve_espionage(self):
+        """Resolve all espionage actions during resolution phase"""
+        for player_id in self.players:
+            if player_id in self.player_orders:
+                for order in self.player_orders[player_id]:
+                    if order.get("type") == "espionage":
+                        self.execute_espionage_order(player_id, order)
+    
+    def execute_espionage_order(self, player_id: str, order: Dict[str, Any]):
+        """Execute a single espionage order"""
+        espionage_type = order.get("espionage_type")
+        target_system_id = order.get("target_system")
+        
+        if target_system_id not in self.systems:
+            return
+        
+        target_system = self.systems[target_system_id]
+        
+        # Check if target system is adjacent to a player-owned system
+        adjacent_owned = False
+        for conn_id in target_system.connections:
+            conn_system = self.systems.get(conn_id)
+            if conn_system and conn_system.owner == player_id:
+                adjacent_owned = True
+                break
+        
+        if not adjacent_owned:
+            return
+        
+        if espionage_type == "sabotage":
+            # Sabotage a system upgrade or starfleets
+            if target_system.upgrades:
+                # Sabotage random upgrade
+                upgrade = target_system.upgrades[0]
+                # Mark as sabotaged (simplified - just remove temporarily)
+                if "sabotaged_upgrades" not in target_system.__dict__:
+                    target_system.sabotaged_upgrades = []
+                target_system.sabotaged_upgrades.append(upgrade)
+            
+            elif target_system.starfleets:
+                # Sabotage starfleets (prevent their movement)
+                for starfleet in target_system.starfleets.values():
+                    if starfleet.orders:
+                        starfleet.orders = {"type": "hold"}  # Force hold position
+        
+        elif espionage_type == "destabilize":
+            # Prevent system upgrade destruction and starport auto-destruction
+            target_system.destabilized = True
+        
+        elif espionage_type == "counter_espionage":
+            # Protect owned system from espionage
+            target_system.counter_espionage = True
     
     def submit_build_orders(self, player_id: str, orders: List[Dict[str, Any]]):
         """Submit build orders for a player"""
