@@ -214,6 +214,174 @@ function App() {
     return currentResources;
   };
 
+  // Render order summary window
+  const renderOrderSummary = () => {
+    if (!showOrderSummary || !gameState) return null;
+    
+    const movementOrders = Object.values(starfleetOrders);
+    const pendingBuildOrders = Object.values(buildOrders);
+    const availableResources = calculateAvailableResources();
+    
+    // Calculate post-turn resources (current resources + income - upkeep - build costs)
+    const currentResources = gameState.player_resources || { tech: 0, metals: 0, chon: 0 };
+    let projectedIncome = { tech: 0, metals: 0, chon: 0 };
+    let upkeepCost = { tech: 0, metals: 0, chon: 0 };
+    
+    // Calculate income from owned systems
+    Object.values(gameState.systems || {}).forEach(system => {
+      if (system.owner === currentPlayer) {
+        projectedIncome.tech += system.resources.tech;
+        projectedIncome.metals += system.resources.metals;
+        projectedIncome.chon += system.resources.chon;
+        
+        // Add upgrade bonuses
+        if (system.upgrades.includes('colony')) projectedIncome.tech += 1;
+        if (system.upgrades.includes('mining_facilities')) {
+          projectedIncome.metals += 1;
+          projectedIncome.chon += 1;
+        }
+      }
+    });
+    
+    // Calculate upkeep (1 of each resource per starfleet)
+    let totalStarfleets = 0;
+    Object.values(gameState.systems || {}).forEach(system => {
+      if (system.starfleet_details) {
+        totalStarfleets += system.starfleet_details.filter(sf => sf.owner === currentPlayer).length;
+      }
+    });
+    
+    upkeepCost = { tech: totalStarfleets, metals: totalStarfleets, chon: totalStarfleets };
+    
+    const postTurnResources = {
+      tech: currentResources.tech + projectedIncome.tech - upkeepCost.tech,
+      metals: currentResources.metals + projectedIncome.metals - upkeepCost.metals,
+      chon: currentResources.chon + projectedIncome.chon - upkeepCost.chon
+    };
+    
+    return (
+      <div className="order-summary-panel fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-white">Order Summary</h3>
+            <button 
+              onClick={() => setShowOrderSummary(false)}
+              className="text-gray-400 hover:text-white text-xl"
+            >
+              ×
+            </button>
+          </div>
+          
+          {/* Movement Orders */}
+          <div className="mb-4">
+            <h4 className="text-lg font-semibold text-yellow-400 mb-2">
+              Movement Orders ({movementOrders.length})
+            </h4>
+            {movementOrders.length > 0 ? (
+              <div className="space-y-2">
+                {movementOrders.map((order, index) => {
+                  const starfleetSystem = Object.values(gameState.systems).find(sys => 
+                    sys.starfleet_details?.some(sf => sf.id === order.starfleet_id)
+                  );
+                  const targetSystem = gameState.systems[order.target_system];
+                  
+                  return (
+                    <div key={index} className="text-sm text-gray-300 bg-gray-700 p-2 rounded">
+                      Starfleet from {starfleetSystem?.name || 'Unknown'} → {order.order_type} → {targetSystem?.name || order.target_system}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-sm">No movement orders</p>
+            )}
+          </div>
+          
+          {/* Build Orders */}
+          <div className="mb-4">
+            <h4 className="text-lg font-semibold text-blue-400 mb-2">
+              Build Orders ({pendingBuildOrders.length})
+            </h4>
+            {pendingBuildOrders.length > 0 ? (
+              <div className="space-y-2">
+                {pendingBuildOrders.map((order, index) => {
+                  const system = gameState.systems[order.system_id];
+                  return (
+                    <div key={index} className="text-sm text-gray-300 bg-gray-700 p-2 rounded">
+                      Building {order.build_type.replace('_', ' ')} in {system?.name || 'Unknown System'}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-sm">No build orders</p>
+            )}
+          </div>
+          
+          {/* Resource Summary */}
+          <div className="mb-4">
+            <h4 className="text-lg font-semibold text-green-400 mb-2">Resource Summary</h4>
+            <div className="grid grid-cols-4 gap-4 text-sm">
+              <div className="text-center">
+                <div className="font-semibold text-gray-300">Resource</div>
+                <div className="text-white">Current</div>
+                <div className="text-green-400">Income</div>
+                <div className="text-red-400">Upkeep</div>
+                <div className="text-yellow-400">Available</div>
+                <div className="text-blue-400">Post-Turn</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-blue-400">Tech</div>
+                <div>{currentResources.tech}</div>
+                <div>+{projectedIncome.tech}</div>
+                <div>-{upkeepCost.tech}</div>
+                <div>{availableResources.tech}</div>
+                <div>{postTurnResources.tech}</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-400">Metals</div>
+                <div>{currentResources.metals}</div>
+                <div>+{projectedIncome.metals}</div>
+                <div>-{upkeepCost.metals}</div>
+                <div>{availableResources.metals}</div>
+                <div>{postTurnResources.metals}</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-green-400">CHON</div>
+                <div>{currentResources.chon}</div>
+                <div>+{projectedIncome.chon}</div>
+                <div>-{upkeepCost.chon}</div>
+                <div>{availableResources.chon}</div>
+                <div>{postTurnResources.chon}</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3">
+            <button 
+              onClick={() => setShowOrderSummary(false)}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
+            >
+              Close
+            </button>
+            {(movementOrders.length > 0 || pendingBuildOrders.length > 0) && (
+              <button 
+                onClick={() => {
+                  setShowOrderSummary(false);
+                  submitAllOrders();
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500"
+              >
+                Finalize Orders
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Issue build order
   const issueBuildOrder = (buildType, systemId) => {
     const newOrders = { ...buildOrders };
