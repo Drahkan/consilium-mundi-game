@@ -154,6 +154,32 @@ function App() {
     setStarfleetOrders(newOrders);
   };
 
+  // Submit starfleet orders
+  const submitOrders = async () => {
+    if (!currentGame || !currentPlayer) return;
+
+    try {
+      const orders = Object.values(starfleetOrders);
+      
+      const response = await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_id: currentPlayer,
+          orders: orders
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to submit orders');
+
+      setStarfleetOrders({});
+      alert('Orders submitted successfully!');
+      
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // Issue build order
   const issueBuildOrder = (buildType, systemId) => {
     const newOrders = { ...buildOrders };
