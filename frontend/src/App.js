@@ -187,11 +187,16 @@ function App() {
     const newOrders = { ...buildOrders };
     const orderId = `${systemId}_${buildType}`;
     
-    newOrders[orderId] = {
-      type: "build",
-      build_type: buildType,
-      system_id: systemId
-    };
+    // If this build order already exists, remove it (toggle behavior)
+    if (newOrders[orderId]) {
+      delete newOrders[orderId];
+    } else {
+      newOrders[orderId] = {
+        type: "build",
+        build_type: buildType,
+        system_id: systemId
+      };
+    }
     
     setBuildOrders(newOrders);
   };
