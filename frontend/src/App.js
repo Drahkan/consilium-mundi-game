@@ -941,7 +941,7 @@ function App() {
                   {Object.keys(starfleetOrders).length} movement orders, {Object.keys(buildOrders).length} build orders pending
                 </p>
                 <button onClick={submitAllOrders} className="submit-all-orders-btn">
-                  Submit All Orders
+                  Finalize Orders
                 </button>
               </div>
             )}
