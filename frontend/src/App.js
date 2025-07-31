@@ -569,6 +569,9 @@ function App() {
             
             const isDisabled = !option.canBuild || !canAfford;
             
+            // Check if requirement is missing (only show "Requires" when NOT met)
+            const missingRequirement = option.requirement && !system.upgrades.includes(option.requirement);
+            
             return (
               <div key={option.type} className="build-option">
                 <div className="build-info">
@@ -576,7 +579,7 @@ function App() {
                   <div className="build-cost">
                     Cost: T:{option.cost.tech} M:{option.cost.metals} C:{option.cost.chon}
                   </div>
-                  {option.requirement && (
+                  {missingRequirement && (
                     <div className="build-requirement">
                       Requires: {option.requirement}
                     </div>
@@ -586,9 +589,9 @@ function App() {
                 <button
                   onClick={() => issueBuildOrder(option.type, selectedSystem)}
                   disabled={isDisabled}
-                  className={`build-btn ${isDisabled ? 'disabled' : ''}`}
+                  className={`build-btn ${isDisabled ? 'disabled' : ''} ${buildOrders[`${selectedSystem}_${option.type}`] ? 'selected' : ''}`}
                 >
-                  Build
+                  {buildOrders[`${selectedSystem}_${option.type}`] ? 'Cancel' : 'Build'}
                 </button>
               </div>
             );
