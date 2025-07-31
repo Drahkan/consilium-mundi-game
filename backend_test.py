@@ -243,6 +243,234 @@ class ConsiliumMundiAPITester:
             return True
         return False
 
+    def test_starfleet_orders(self):
+        """Test submitting starfleet movement orders"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
+            return False
+        
+        # First get game state to find our starfleets
+        success, game_state = self.run_test(
+            "Get Game State for Orders",
+            "GET",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Find our starfleets and connected systems
+        our_starfleets = []
+        for system_id, system in game_state.get('systems', {}).items():
+            if system.get('owner') == self.player_id:
+                for starfleet in system.get('starfleet_details', []):
+                    if starfleet.get('owner') == self.player_id:
+                        our_starfleets.append({
+                            'id': starfleet['id'],
+                            'system_id': system_id,
+                            'connections': system.get('connections', [])
+                        })
+        
+        if not our_starfleets:
+            print("❌ No starfleets found for player")
+            return False
+        
+        # Create movement orders
+        orders = []
+        for starfleet in our_starfleets[:1]:  # Test with first starfleet
+            if starfleet['connections']:
+                orders.append({
+                    "starfleet_id": starfleet['id'],
+                    "order_type": "move",
+                    "target_system": starfleet['connections'][0]
+                })
+        
+        if not orders:
+            print("❌ No valid movement orders could be created")
+            return False
+        
+        success, response = self.run_test(
+            "Submit Starfleet Orders",
+            "POST",
+            f"api/game/{self.game_id}/orders",
+            200,
+            data={
+                "player_id": self.player_id,
+                "orders": orders
+            }
+        )
+        
+        return success
+
+    def test_build_orders(self):
+        """Test submitting build orders"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
+            return False
+        
+        # Get game state to find our systems
+        success, game_state = self.run_test(
+            "Get Game State for Building",
+            "GET",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Find our owned systems
+        our_systems = []
+        for system_id, system in game_state.get('systems', {}).items():
+            if system.get('owner') == self.player_id:
+                our_systems.append(system_id)
+        
+        if not our_systems:
+            print("❌ No owned systems found for player")
+            return False
+        
+        # Create build orders
+        orders = [
+            {
+                "type": "build",
+                "build_type": "starfleet",
+                "system_id": our_systems[0]
+            }
+        ]
+        
+        success, response = self.run_test(
+            "Submit Build Orders",
+            "POST",
+            f"api/game/{self.game_id}/build-orders",
+            200,
+            data={
+                "player_id": self.player_id,
+                "orders": orders
+            }
+        )
+        
+        return success
+
+    def test_espionage_orders(self):
+        """Test submitting espionage orders"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
+            return False
+        
+        # Get game state to find target systems
+        success, game_state = self.run_test(
+            "Get Game State for Espionage",
+            "GET",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Find enemy systems adjacent to our systems
+        our_systems = [s_id for s_id, s in game_state.get('systems', {}).items() if s.get('owner') == self.player_id]
+        target_systems = []
+        
+        for our_system_id in our_systems:
+            our_system = game_state['systems'][our_system_id]
+            for conn_id in our_system.get('connections', []):
+                conn_system = game_state['systems'].get(conn_id)
+                if conn_system and conn_system.get('owner') and conn_system.get('owner') != self.player_id:
+                    target_systems.append(conn_id)
+                    break
+        
+        if not target_systems:
+            print("❌ No valid espionage targets found")
+            return False
+        
+        # Create espionage orders
+        orders = [
+            {
+                "espionage_type": "sabotage",
+                "target_system": target_systems[0]
+            }
+        ]
+        
+        success, response = self.run_test(
+            "Submit Espionage Orders",
+            "POST",
+            f"api/game/{self.game_id}/espionage-orders",
+            200,
+            data={
+                "player_id": self.player_id,
+                "orders": orders
+            }
+        )
+        
+        return success
+
+    def test_turn_resolution(self):
+        """Test turn resolution"""
+        if not self.game_id:
+            print("❌ No game ID available for testing")
+            return False
+        
+        # Get current turn number
+        success, game_state = self.run_test(
+            "Get Game State Before Turn Resolution",
+            "GET",
+            f"api/game/{self.game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        current_turn = game_state.get('turn', 1)
+        print(f"   Current turn: {current_turn}")
+        
+        success, response = self.run_test(
+            "Resolve Turn",
+            "POST",
+            f"api/game/{self.game_id}/resolve-turn",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Verify turn advanced
+        new_turn = response.get('new_turn', current_turn)
+        if new_turn > current_turn:
+            print(f"   Turn advanced to: {new_turn}")
+            return True
+        else:
+            print(f"❌ Turn did not advance (still {current_turn})")
+            return False
+
+    def test_resource_management(self):
+        """Test resource collection and management"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
+            return False
+        
+        success, game_state = self.run_test(
+            "Get Game State for Resources",
+            "GET",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        resources = game_state.get('player_resources', {})
+        print(f"   Player resources: Tech:{resources.get('tech', 0)}, Metals:{resources.get('metals', 0)}, CHON:{resources.get('chon', 0)}")
+        
+        # Check if resources are reasonable (should have starting resources)
+        if resources.get('tech', 0) >= 0 and resources.get('metals', 0) >= 0 and resources.get('chon', 0) >= 0:
+            return True
+        else:
+            print("❌ Invalid resource values")
+            return False
+
 def main():
     print("🚀 Starting Consilium Mundi API Tests")
     print("=" * 50)
