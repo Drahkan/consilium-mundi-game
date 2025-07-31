@@ -757,6 +757,9 @@ function App() {
 
         {/* Main game area */}
         <div className="game-main">
+          {/* Victory overlay */}
+          {renderVictoryStatus()}
+          
           <div className="galaxy-section">
             {renderGalaxyMap()}
           </div>
@@ -764,6 +767,7 @@ function App() {
           <div className="info-panel">
             {renderSystemDetails()}
             {renderBuildingPanel()}
+            {renderCombatReports()}
             {renderOrdersPanel()}
             
             {(Object.keys(starfleetOrders).length > 0 || Object.keys(buildOrders).length > 0) && (
