@@ -742,6 +742,15 @@ function App() {
                   Resolve Turn
                 </button>
               )}
+              
+              {gameState?.combat_reports && gameState.combat_reports.length > 0 && (
+                <button 
+                  onClick={() => setShowCombatReports(!showCombatReports)} 
+                  className="combat-reports-btn"
+                >
+                  Combat Reports ({gameState.combat_reports.length})
+                </button>
+              )}
             </div>
           )}
         </div>
