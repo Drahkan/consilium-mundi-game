@@ -533,6 +533,98 @@ function App() {
     return player ? player.name : 'Unknown';
   };
 
+  // Map navigation functions
+  const centerHomeWorld = () => {
+    if (!gameState || !gameState.systems) return;
+    
+    // Find current player's home system
+    const homeSystem = Object.values(gameState.systems).find(
+      system => system.is_home_system && system.owner === currentPlayer
+    );
+    
+    if (homeSystem) {
+      // Center map on home system
+      setMapPan({ x: -homeSystem.x + 400, y: -homeSystem.y + 300 });
+      setMapZoom(1.5);
+    }
+  };
+  
+  const handleMapWheel = (e) => {
+    e.preventDefault();
+    
+    // Get mouse position relative to the SVG
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Calculate zoom factor
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.max(0.5, Math.min(3, mapZoom * zoomFactor));
+    
+    // Calculate new pan to keep mouse position fixed
+    const zoomDelta = newZoom / mapZoom;
+    const newPanX = mouseX - (mouseX - mapPan.x) * zoomDelta;
+    const newPanY = mouseY - (mouseY - mapPan.y) * zoomDelta;
+    
+    setMapZoom(newZoom);
+    setMapPan({ x: newPanX, y: newPanY });
+  };
+  
+  const handleMapMouseDown = (e) => {
+    // Only start dragging if not clicking on an interactive element
+    if (e.target.classList.contains('system-node') || e.target.classList.contains('starfleet-node')) {
+      return;
+    }
+    
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setPanStart({ x: mapPan.x, y: mapPan.y });
+    e.preventDefault();
+  };
+  
+  const handleMapMouseMove = (e) => {
+    if (!isDragging) return;
+    
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
+    
+    const newPanX = panStart.x + deltaX;
+    const newPanY = panStart.y + deltaY;
+    
+    // Constrain panning to prevent empty views
+    const systems = Object.values(gameState?.systems || {});
+    if (systems.length > 0) {
+      const minX = Math.min(...systems.map(s => s.x)) - 100;
+      const maxX = Math.max(...systems.map(s => s.x)) + 100;
+      const minY = Math.min(...systems.map(s => s.y)) - 100;
+      const maxY = Math.max(...systems.map(s => s.y)) + 100;
+      
+      const constrainedPanX = Math.max(
+        -maxX * mapZoom + 100,
+        Math.min(-minX * mapZoom + 700, newPanX)
+      );
+      const constrainedPanY = Math.max(
+        -maxY * mapZoom + 100,
+        Math.min(-minY * mapZoom + 500, newPanY)
+      );
+      
+      setMapPan({ x: constrainedPanX, y: constrainedPanY });
+    } else {
+      setMapPan({ x: newPanX, y: newPanY });
+    }
+  };
+  
+  const handleMapMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Auto-center home world when game loads or player switches
+  React.useEffect(() => {
+    if (gameState && currentPlayer) {
+      centerHomeWorld();
+    }
+  }, [gameState?.turn, currentPlayer]); // Only trigger on turn change or player switch
+
   // Render galaxy map
   const renderGalaxyMap = () => {
     if (!gameState || !gameState.systems) return null;
