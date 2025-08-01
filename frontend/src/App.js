@@ -721,15 +721,6 @@ function App() {
     setIsDragging(false);
   };
 
-  // Auto-center home world when game loads or player switches
-  React.useEffect(() => {
-    if (gameState && currentPlayer) {
-      centerHomeWorld();
-      // Auto-select current player's home system
-      selectPlayerHomeSystem();
-    }
-  }, [gameState?.turn, currentPlayer]); // Only trigger on turn change or player switch
-
   // Automatically select current player's home system
   const selectPlayerHomeSystem = () => {
     if (!gameState || !gameState.systems || !currentPlayer) return;
@@ -745,8 +736,19 @@ function App() {
       setSelectedStarfleet(null);
       // Hide build panel initially
       setShowBuildPanel(false);
+      console.log(`Auto-selected home system: ${homeSystem.name} for player ${currentPlayer}`);
+    } else {
+      console.log(`No home system found for player ${currentPlayer}`);
     }
   };
+
+  // Auto-center home world and select home system when game loads or player switches
+  React.useEffect(() => {
+    if (gameState && currentPlayer && gameState.systems) {
+      centerHomeWorld();
+      selectPlayerHomeSystem();
+    }
+  }, [gameState, currentPlayer]); // Trigger when gameState or currentPlayer changes
 
   // Sync build orders when switching players
   React.useEffect(() => {
