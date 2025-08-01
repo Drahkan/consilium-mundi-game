@@ -862,13 +862,20 @@ function App() {
       setSeenCombatTurns(prev => new Set([...prev, turn]));
     };
     
-    const getOutcomeColor = (outcome) => {
+    const getOutcomeColor = (outcome, attackers, defenders, systemOwner) => {
       switch (outcome) {
-        case 'attacker_victory': return 'text-red-400';
-        case 'defender_victory': return 'text-blue-400';
-        case 'stalemate': return 'text-yellow-400';
-        case 'automatic_capture': return 'text-green-400';
-        default: return 'text-gray-400';
+        case 'attacker_victory':
+        case 'automatic_capture':
+          // Use the color of the attacking player (first attacker)
+          const attackerPlayerId = Object.keys(attackers)[0];
+          return { color: getPlayerColor(attackerPlayerId) };
+        case 'defender_victory':
+          // Use the color of the defending player
+          return { color: getPlayerColor(systemOwner) };
+        case 'stalemate':
+          return { color: '#9ca3af' }; // Gray for no winner
+        default:
+          return { color: '#9ca3af' }; // Gray for unknown
       }
     };
     
