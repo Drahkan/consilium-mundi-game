@@ -996,6 +996,44 @@ async def join_game(request: JoinGameRequest):
         "status": "joined"
     }
 
+@app.post("/api/game/{game_id}/add-ai-players")
+async def add_ai_players(game_id: str):
+    """Add AI players to a game for testing"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = games[game_id]
+    
+    ai_names = ["Admiral Zara", "Commander Vex", "Captain Nova"]
+    added_players = []
+    
+    # Add AI players up to the game limit
+    for ai_name in ai_names:
+        if len(game.players) >= game.config.num_players:
+            break
+            
+        player_id = str(uuid.uuid4())
+        game.players.append(player_id)
+        
+        players[player_id] = {
+            "id": player_id,
+            "name": ai_name,
+            "game_id": game_id
+        }
+        added_players.append({"id": player_id, "name": ai_name})
+    
+    # If game is now full, start it
+    if len(game.players) == game.config.num_players:
+        game.create_initial_starfleets()
+        game.phase = "activity"
+    
+    return {
+        "game_id": game_id,
+        "players_added": added_players,
+        "total_players": len(game.players),
+        "status": "success"
+    }
+
 @app.get("/api/game/{game_id}/state")
 async def get_game_state(game_id: str, player_id: Optional[str] = None):
     """Get current game state"""
