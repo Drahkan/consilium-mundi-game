@@ -969,6 +969,7 @@ function App() {
     if (!system || system.owner !== currentPlayer) return null;
     
     const availableResources = calculateAvailableResources();
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
     
     const buildOptions = [
       {
@@ -1049,18 +1050,18 @@ function App() {
                 <button
                   onClick={() => issueBuildOrder(option.type, selectedSystem)}
                   disabled={isDisabled}
-                  className={`build-btn ${isDisabled ? 'disabled' : ''} ${buildOrders[`${selectedSystem}_${option.type}`] ? 'selected' : ''}`}
+                  className={`build-btn ${isDisabled ? 'disabled' : ''} ${currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'selected' : ''}`}
                 >
-                  {buildOrders[`${selectedSystem}_${option.type}`] ? 'Cancel' : 'Build'}
+                  {currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'Cancel' : 'Build'}
                 </button>
               </div>
             );
           })}
         </div>
         
-        {Object.keys(buildOrders).length > 0 && (
+        {Object.keys(currentBuildOrders).length > 0 && (
           <div className="build-queue">
-            <p>{Object.keys(buildOrders).length} build orders pending</p>
+            <p>{Object.keys(currentBuildOrders).length} build orders pending</p>
           </div>
         )}
       </div>
