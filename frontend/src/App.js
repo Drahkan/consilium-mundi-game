@@ -562,8 +562,14 @@ function App() {
     );
     
     if (homeSystem) {
-      // Center map on home system
-      setMapPan({ x: -homeSystem.x + 400, y: -homeSystem.y + 300 });
+      // Center map on home system - calculate to put home system in center of viewport
+      const viewportCenterX = 400; // Half of 800px viewBox width
+      const viewportCenterY = 300; // Half of 600px viewBox height
+      
+      setMapPan({ 
+        x: viewportCenterX - homeSystem.x * mapZoom, 
+        y: viewportCenterY - homeSystem.y * mapZoom 
+      });
       setMapZoom(1.5);
     }
   };
