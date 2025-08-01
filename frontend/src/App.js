@@ -1318,12 +1318,6 @@ function App() {
                 ))}
               </select>
               
-              {availablePlayers.length === 1 && (
-                <button onClick={addAIPlayers} className="add-ai-btn">
-                  Add AI Players
-                </button>
-              )}
-              
               {gameState?.phase === 'activity' && (
                 <button onClick={resolveTurn} className="resolve-turn-btn">
                   Resolve Turn
