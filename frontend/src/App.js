@@ -910,7 +910,10 @@ function App() {
                         </div>
                         <div className="report-details mt-2">
                           <p>
-                            Outcome: <span className={`font-bold ${getOutcomeColor(report.outcome)}`}>
+                            Outcome: <span 
+                              className="font-bold"
+                              style={getOutcomeColor(report.outcome, report.attackers, report.defenders, gameState.systems[report.system]?.owner)}
+                            >
                               {report.outcome.replace('_', ' ').toUpperCase()}
                             </span>
                           </p>
