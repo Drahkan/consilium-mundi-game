@@ -68,27 +68,16 @@ function App() {
       // Automatically add AI players for testing
       setTimeout(async () => {
         try {
-          const aiNames = ['Admiral Zara', 'Commander Vex', 'Captain Nova'];
+          const aiResponse = await fetch(`${API_BASE}/api/game/${data.game_id}/add-ai-players`, {
+            method: 'POST',
+          });
           
-          for (let i = 0; i < 3; i++) {
-            try {
-              await fetch(`${API_BASE}/api/join-game`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  player_name: aiNames[i],
-                  game_id: data.game_id
-                })
-              });
-            } catch (err) {
-              console.error('Failed to add AI player:', err);
-            }
+          if (aiResponse.ok) {
+            // Refresh game state to show AI players
+            await loadGameState(data.game_id);
+            await loadGamePlayers(data.game_id);
+            console.log('AI players added automatically');
           }
-          
-          // Reload game state and players after adding AI
-          await loadGameState(data.game_id);
-          await loadGamePlayers(data.game_id);
-          console.log('AI players added automatically');
         } catch (err) {
           console.warn('Failed to add AI players:', err);
         }
