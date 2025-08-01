@@ -643,6 +643,14 @@ function App() {
     }
   }, [gameState?.turn, currentPlayer]); // Only trigger on turn change or player switch
 
+  // Sync build orders when switching players
+  React.useEffect(() => {
+    if (currentPlayer) {
+      const currentPlayerOrders = playerBuildOrders[currentPlayer] || {};
+      setBuildOrders(currentPlayerOrders);
+    }
+  }, [currentPlayer, playerBuildOrders]);
+
   // Render galaxy map
   const renderGalaxyMap = () => {
     if (!gameState || !gameState.systems) return null;
