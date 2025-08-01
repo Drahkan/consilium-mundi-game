@@ -16,6 +16,7 @@ function App() {
   const [selectedStarfleet, setSelectedStarfleet] = useState(null);
   const [starfleetOrders, setStarfleetOrders] = useState({});
   const [buildOrders, setBuildOrders] = useState({});
+  const [playerBuildOrders, setPlayerBuildOrders] = useState({}); // Per-player build orders
   const [showBuildPanel, setShowBuildPanel] = useState(false);
   const [showCombatReports, setShowCombatReports] = useState(false);
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
