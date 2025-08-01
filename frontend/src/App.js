@@ -479,7 +479,8 @@ function App() {
   // Submit all orders (both movement and build)
   const submitAllOrders = async () => {
     const movementCount = Object.keys(starfleetOrders).length;
-    const buildCount = Object.keys(buildOrders).length;
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
+    const buildCount = Object.keys(currentBuildOrders).length;
     
     if (movementCount === 0 && buildCount === 0) {
       alert('No orders to submit!');
@@ -495,8 +496,6 @@ function App() {
       return;
     }
     
-    let success = true;
-    
     try {
       // Submit starfleet orders first
       if (Object.keys(starfleetOrders).length > 0) {
@@ -504,13 +503,15 @@ function App() {
       }
       
       // Submit build orders
-      if (Object.keys(buildOrders).length > 0) {
+      if (Object.keys(currentBuildOrders).length > 0) {
+        // Temporarily set buildOrders for submitBuildOrders to work
+        setBuildOrders(currentBuildOrders);
         await submitBuildOrders();
+        // Clear current player's build orders after successful submission
+        updateCurrentPlayerBuildOrders({});
       }
       
-      if (success) {
-        alert(`Turn finalized for ${getPlayerName(currentPlayer)}!`);
-      }
+      alert(`Turn finalized for ${getPlayerName(currentPlayer)}!`);
     } catch (err) {
       setError(err.message);
     }
