@@ -408,13 +408,14 @@ function App() {
 
   // Issue build order
   const issueBuildOrder = (buildType, systemId) => {
-    const newOrders = { ...buildOrders };
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
+    const newOrders = { ...currentBuildOrders };
     const orderId = `${systemId}_${buildType}`;
     
     // If this build order already exists, remove it (toggle behavior)
     if (newOrders[orderId]) {
       delete newOrders[orderId];
-      setBuildOrders(newOrders);
+      updateCurrentPlayerBuildOrders(newOrders);
       return;
     }
 
@@ -446,7 +447,7 @@ function App() {
       system_id: systemId
     };
     
-    setBuildOrders(newOrders);
+    updateCurrentPlayerBuildOrders(newOrders);
   };
 
   // Submit build orders
