@@ -193,14 +193,30 @@ function App() {
     }
   };
 
+  // Get current player's build orders
+  const getCurrentPlayerBuildOrders = () => {
+    return playerBuildOrders[currentPlayer] || {};
+  };
+  
+  // Update current player's build orders
+  const updateCurrentPlayerBuildOrders = (orders) => {
+    setPlayerBuildOrders(prev => ({
+      ...prev,
+      [currentPlayer]: orders
+    }));
+    // Also update legacy buildOrders for compatibility
+    setBuildOrders(orders);
+  };
+
   // Calculate available resources after pending build orders
   const calculateAvailableResources = () => {
     if (!gameState || !gameState.player_resources) return { tech: 0, metals: 0, chon: 0 };
     
     const currentResources = { ...gameState.player_resources };
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
     
     // Subtract costs of pending build orders
-    Object.values(buildOrders).forEach(order => {
+    Object.values(currentBuildOrders).forEach(order => {
       const buildType = order.build_type;
       const buildOptions = [
         { type: 'starfleet', cost: { tech: 1, metals: 1, chon: 1 } },
