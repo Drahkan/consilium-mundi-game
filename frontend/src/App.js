@@ -725,8 +725,28 @@ function App() {
   React.useEffect(() => {
     if (gameState && currentPlayer) {
       centerHomeWorld();
+      // Auto-select current player's home system
+      selectPlayerHomeSystem();
     }
   }, [gameState?.turn, currentPlayer]); // Only trigger on turn change or player switch
+
+  // Automatically select current player's home system
+  const selectPlayerHomeSystem = () => {
+    if (!gameState || !gameState.systems || !currentPlayer) return;
+    
+    // Find current player's home system
+    const homeSystem = Object.values(gameState.systems).find(
+      system => system.is_home_system && system.owner === currentPlayer
+    );
+    
+    if (homeSystem) {
+      setSelectedSystem(homeSystem.id);
+      // Clear selected starfleet when switching systems
+      setSelectedStarfleet(null);
+      // Hide build panel initially
+      setShowBuildPanel(false);
+    }
+  };
 
   // Sync build orders when switching players
   React.useEffect(() => {
