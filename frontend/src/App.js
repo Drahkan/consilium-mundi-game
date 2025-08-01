@@ -616,21 +616,32 @@ function App() {
     const newPanX = panStart.x + deltaX;
     const newPanY = panStart.y + deltaY;
     
-    // Constrain panning to prevent empty views
+    // Get viewport dimensions
+    const viewportCenterX = 400; // Half of 800px viewBox width
+    const viewportCenterY = 300; // Half of 600px viewBox height
+    
+    // Constrain panning to keep part of map visible in center
     const systems = Object.values(gameState?.systems || {});
     if (systems.length > 0) {
-      const minX = Math.min(...systems.map(s => s.x)) - 100;
-      const maxX = Math.max(...systems.map(s => s.x)) + 100;
-      const minY = Math.min(...systems.map(s => s.y)) - 100;
-      const maxY = Math.max(...systems.map(s => s.y)) + 100;
+      const minX = Math.min(...systems.map(s => s.x));
+      const maxX = Math.max(...systems.map(s => s.x));
+      const minY = Math.min(...systems.map(s => s.y));
+      const maxY = Math.max(...systems.map(s => s.y));
       
+      // Calculate galaxy bounds in screen coordinates
+      const galaxyLeft = minX * mapZoom;
+      const galaxyRight = maxX * mapZoom;
+      const galaxyTop = minY * mapZoom;
+      const galaxyBottom = maxY * mapZoom;
+      
+      // Constrain so that some part of galaxy is always near center
       const constrainedPanX = Math.max(
-        -maxX * mapZoom + 100,
-        Math.min(-minX * mapZoom + 700, newPanX)
+        viewportCenterX - galaxyRight,  // Don't pan too far left
+        Math.min(viewportCenterX - galaxyLeft, newPanX)  // Don't pan too far right
       );
       const constrainedPanY = Math.max(
-        -maxY * mapZoom + 100,
-        Math.min(-minY * mapZoom + 500, newPanY)
+        viewportCenterY - galaxyBottom, // Don't pan too far up
+        Math.min(viewportCenterY - galaxyTop, newPanY)   // Don't pan too far down
       );
       
       setMapPan({ x: constrainedPanX, y: constrainedPanY });
