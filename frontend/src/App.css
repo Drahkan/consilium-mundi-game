@@ -888,10 +888,12 @@ body {
 
 .build-btn.disabled {
   opacity: 0.5;
-  cursor: not-allowed;
-  background: rgba(75, 85, 99, 0.3);
+  cursor: not-allowed !important;
+  background: rgba(75, 85, 99, 0.3) !important;
+  pointer-events: none;
 }
 
 .build-btn.disabled:hover {
-  transform: none;
+  transform: none !important;
+  box-shadow: none !important;
 }
