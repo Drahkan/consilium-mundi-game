@@ -901,13 +901,36 @@ function App() {
     );
   };
 
-  // Render combat reports
+  // Render combat reports (filtered per player)
   const renderCombatReports = () => {
     if (!gameState || !gameState.combat_reports || !showCombatReports) return null;
     
+    // Filter combat reports to only show those involving the current player
+    const playerReports = gameState.combat_reports.filter(report => {
+      // Show if current player was an attacker
+      if (report.attackers && Object.keys(report.attackers).includes(currentPlayer)) {
+        return true;
+      }
+      // Show if current player was the defender (owner of the system)
+      const system = gameState.systems[report.system];
+      if (system && system.owner === currentPlayer) {
+        return true;
+      }
+      return false;
+    });
+    
+    if (playerReports.length === 0) {
+      return (
+        <div className="combat-reports-panel">
+          <h4>Combat Reports</h4>
+          <p className="text-gray-400 text-sm">No combat reports for this player.</p>
+        </div>
+      );
+    }
+    
     // Group reports by turn
     const reportsByTurn = {};
-    gameState.combat_reports.forEach((report, index) => {
+    playerReports.forEach((report, index) => {
       const turn = report.turn || 'Unknown';
       if (!reportsByTurn[turn]) {
         reportsByTurn[turn] = [];
