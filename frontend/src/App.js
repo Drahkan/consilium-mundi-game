@@ -243,7 +243,8 @@ function App() {
     if (!showOrderSummary || !gameState) return null;
     
     const movementOrders = Object.values(starfleetOrders);
-    const pendingBuildOrders = Object.values(buildOrders);
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
+    const pendingBuildOrders = Object.values(currentBuildOrders);
     const availableResources = calculateAvailableResources();
     
     // Calculate post-turn resources (current resources + income - upkeep - build costs)
