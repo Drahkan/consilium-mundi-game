@@ -1325,14 +1325,14 @@ function App() {
             {renderOrdersPanel()}
             {renderOrderSummary()}
             
-            {(Object.keys(starfleetOrders).length > 0 || Object.keys(buildOrders).length > 0) && (
+            {(Object.keys(starfleetOrders).length > 0 || Object.keys(getCurrentPlayerBuildOrders()).length > 0) && (
               <div className="global-submit-section">
                 <div className="order-actions">
                   <button 
                     onClick={() => setShowOrderSummary(true)}
                     className="order-summary-btn"
                   >
-                    Review Orders ({Object.keys(starfleetOrders).length + Object.keys(buildOrders).length})
+                    Review Orders ({Object.keys(starfleetOrders).length + Object.keys(getCurrentPlayerBuildOrders()).length})
                   </button>
                   <button onClick={submitAllOrders} className="submit-all-orders-btn">
                     Finalize Orders
