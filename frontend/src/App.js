@@ -584,15 +584,63 @@ function App() {
     
     // Calculate zoom factor
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.5, Math.min(3, mapZoom * zoomFactor));
+    let newZoom = Math.max(0.8, Math.min(3, mapZoom * zoomFactor));
     
-    // Calculate new pan to keep mouse position fixed
-    const zoomDelta = newZoom / mapZoom;
-    const newPanX = mouseX - (mouseX - mapPan.x) * zoomDelta;
-    const newPanY = mouseY - (mouseY - mapPan.y) * zoomDelta;
+    // Calculate galaxy bounds to determine minimum zoom
+    const systems = Object.values(gameState?.systems || {});
+    if (systems.length > 0) {
+      const minX = Math.min(...systems.map(s => s.x));
+      const maxX = Math.max(...systems.map(s => s.x));
+      const minY = Math.min(...systems.map(s => s.y));
+      const maxY = Math.max(...systems.map(s => s.y));
+      
+      const galaxyWidth = maxX - minX;
+      const galaxyHeight = maxY - minY;
+      const viewportWidth = 800;
+      const viewportHeight = 600;
+      
+      // Calculate minimum zoom to show 90% of viewport
+      const minZoomX = (viewportWidth * 0.9) / galaxyWidth;
+      const minZoomY = (viewportHeight * 0.9) / galaxyHeight;
+      const minZoom = Math.min(minZoomX, minZoomY);
+      
+      // Enforce minimum zoom
+      newZoom = Math.max(minZoom, newZoom);
+      
+      // If at minimum zoom, center the map and disable panning
+      if (newZoom <= minZoom + 0.05) {
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        setMapPan({ 
+          x: 400 - centerX * newZoom, 
+          y: 300 - centerY * newZoom 
+        });
+      } else {
+        // Calculate new pan to keep mouse position fixed during zoom
+        const zoomDelta = newZoom / mapZoom;
+        const newPanX = mouseX - (mouseX - mapPan.x) * zoomDelta;
+        const newPanY = mouseY - (mouseY - mapPan.y) * zoomDelta;
+        
+        // Apply panning constraints
+        const galaxyLeft = minX * newZoom;
+        const galaxyRight = maxX * newZoom;
+        const galaxyTop = minY * newZoom;
+        const galaxyBottom = maxY * newZoom;
+        
+        const constrainedPanX = Math.max(
+          400 - galaxyRight,
+          Math.min(400 - galaxyLeft, newPanX)
+        );
+        const constrainedPanY = Math.max(
+          300 - galaxyBottom,
+          Math.min(300 - galaxyTop, newPanY)
+        );
+        
+        setMapPan({ x: constrainedPanX, y: constrainedPanY });
+      }
+    }
     
     setMapZoom(newZoom);
-    setMapPan({ x: newPanX, y: newPanY });
   };
   
   const handleMapMouseDown = (e) => {
