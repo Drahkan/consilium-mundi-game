@@ -596,20 +596,75 @@ function App() {
     if (!currentGame) return;
 
     try {
+      setLoading(true);
+      
+      // Auto-submit pending orders for all players before resolving turn
+      await autoSubmitAllPendingOrders();
+      
       const response = await fetch(`${API_BASE}/api/game/${currentGame}/resolve-turn`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
       });
 
       if (!response.ok) throw new Error('Failed to resolve turn');
 
-      // Reload game state
+      alert('Turn resolved! All pending orders have been automatically submitted.');
       await loadGameState(currentGame);
-      alert('Turn resolved!');
+      await loadGamePlayers(currentGame);
       
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Auto-submit pending orders for all players (called during turn resolution)
+  const autoSubmitAllPendingOrders = async () => {
+    // Submit orders for all players who have pending orders
+    for (const player of availablePlayers) {
+      const playerId = player.id;
+      
+      // Check if this player has pending starfleet orders
+      const playerStarfleetOrders = Object.keys(starfleetOrders).length > 0 && currentPlayer === playerId ? starfleetOrders : {};
+      
+      // Check if this player has pending build orders
+      const playerBuildOrders = playerBuildOrders[playerId] || {};
+      
+      try {
+        // Submit starfleet orders if any
+        if (Object.keys(playerStarfleetOrders).length > 0) {
+          const orders = Object.values(playerStarfleetOrders);
+          await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              player_id: playerId,
+              orders: orders
+            })
+          });
+        }
+        
+        // Submit build orders if any
+        if (Object.keys(playerBuildOrders).length > 0) {
+          const orders = Object.values(playerBuildOrders);
+          await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              player_id: playerId,
+              orders: orders
+            })
+          });
+        }
+      } catch (err) {
+        console.warn(`Failed to auto-submit orders for player ${playerId}:`, err);
+      }
+    }
+    
+    // Clear all pending orders after auto-submission
+    setStarfleetOrders({});
+    setPlayerBuildOrders({});
+    setBuildOrders({});
   };
 
   // Get player color
