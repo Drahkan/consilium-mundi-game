@@ -233,10 +233,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Resource Management Bug Fix"
-    - "Build Button State Management"
-    - "Combat Reports UI Improvements"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
