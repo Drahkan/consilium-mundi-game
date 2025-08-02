@@ -852,6 +852,7 @@ function App() {
                   strokeWidth={selectedSystem === system.id ? "3" : system.is_home_system ? "2" : "1"}
                   className="system-node"
                   onClick={() => handleSystemClick(system.id)}
+                  onDoubleClick={() => handleSystemDoubleClick(system.id)}
                   style={{ cursor: 'pointer' }}
                 />
                 
