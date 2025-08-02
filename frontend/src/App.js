@@ -557,9 +557,18 @@ function App() {
 
   // Submit all orders (both movement and build)
   const submitAllOrders = async () => {
+    console.log('submitAllOrders called:', { currentGame, currentPlayer });
+    
+    if (!currentGame || !currentPlayer) {
+      alert('Game or player not properly initialized!');
+      return;
+    }
+    
     const movementCount = Object.keys(starfleetOrders).length;
     const currentBuildOrders = getCurrentPlayerBuildOrders();
     const buildCount = Object.keys(currentBuildOrders).length;
+    
+    console.log('Orders to submit:', { movementCount, buildCount, currentBuildOrders });
     
     if (movementCount === 0 && buildCount === 0) {
       alert('No orders to submit!');
@@ -578,11 +587,13 @@ function App() {
     try {
       // Submit starfleet orders first
       if (Object.keys(starfleetOrders).length > 0) {
+        console.log('Submitting starfleet orders...');
         await submitOrders();
       }
       
       // Submit build orders
       if (Object.keys(currentBuildOrders).length > 0) {
+        console.log('Submitting build orders...');
         // Temporarily set buildOrders for submitBuildOrders to work
         setBuildOrders(currentBuildOrders);
         await submitBuildOrders();
@@ -597,6 +608,7 @@ function App() {
       await loadGameState(currentGame);
       
     } catch (err) {
+      console.error('Error in submitAllOrders:', err);
       setError(err.message);
     }
   };
