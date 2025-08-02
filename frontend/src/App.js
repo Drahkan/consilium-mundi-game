@@ -241,7 +241,9 @@ function App() {
 
   // Calculate available resources after pending build orders
   const calculateAvailableResources = () => {
-    if (!gameState || !gameState.player_resources) return { tech: 0, metals: 0, chon: 0 };
+    if (!gameState || !gameState.player_resources || !currentPlayer) {
+      return { tech: 0, metals: 0, chon: 0 };
+    }
     
     const currentResources = { ...gameState.player_resources };
     const currentBuildOrders = getCurrentPlayerBuildOrders();
@@ -260,9 +262,9 @@ function App() {
       
       const option = buildOptions.find(opt => opt.type === buildType);
       if (option) {
-        currentResources.tech -= option.cost.tech;
-        currentResources.metals -= option.cost.metals;
-        currentResources.chon -= option.cost.chon;
+        currentResources.tech = Math.max(0, currentResources.tech - option.cost.tech);
+        currentResources.metals = Math.max(0, currentResources.metals - option.cost.metals);
+        currentResources.chon = Math.max(0, currentResources.chon - option.cost.chon);
       }
     });
     
