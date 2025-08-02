@@ -582,7 +582,26 @@ function App() {
     return { name: playerName, color: playerColor };
   };
 
-  // Map navigation functions
+  const handleSystemDoubleClick = (systemId) => {
+    if (!gameState || !gameState.systems) return;
+    
+    const system = gameState.systems[systemId];
+    if (system) {
+      // Center map on the double-clicked system
+      const viewportCenterX = 400;
+      const viewportCenterY = 300;
+      
+      setMapPan({ 
+        x: viewportCenterX - system.x * mapZoom, 
+        y: viewportCenterY - system.y * mapZoom 
+      });
+      
+      // Also select the system
+      setSelectedSystem(systemId);
+      setSelectedStarfleet(null);
+      setShowBuildPanel(false);
+    }
+  };
   const centerHomeWorld = () => {
     if (!gameState || !gameState.systems) return;
     
