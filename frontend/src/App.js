@@ -1340,9 +1340,8 @@ function App() {
                 
                 <button
                   onClick={() => issueBuildOrder(option.type, selectedSystem)}
-                  disabled={isDisabled}
-                  className={`build-btn ${isDisabled ? 'disabled' : ''} ${currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'selected' : ''}`}
-                  style={{ pointerEvents: isDisabled ? 'none' : 'auto' }}
+                  disabled={isDisabled && !currentBuildOrders[`${selectedSystem}_${option.type}`]}
+                  className={`build-btn ${isDisabled && !currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'disabled' : ''} ${currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'selected' : ''}`}
                 >
                   {currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'Cancel' : 'Build'}
                 </button>
