@@ -526,11 +526,16 @@ function App() {
         // Temporarily set buildOrders for submitBuildOrders to work
         setBuildOrders(currentBuildOrders);
         await submitBuildOrders();
-        // Clear current player's build orders after successful submission
-        updateCurrentPlayerBuildOrders({});
       }
       
+      // Clear current player's build orders after successful submission
+      updateCurrentPlayerBuildOrders({});
+      
       alert(`Turn finalized for ${getPlayerName(currentPlayer)}!`);
+      
+      // Refresh game state
+      await loadGameState(currentGame);
+      
     } catch (err) {
       setError(err.message);
     }
