@@ -708,7 +708,7 @@ function App() {
     }
   };
   const centerHomeWorld = () => {
-    if (!gameState || !gameState.systems) return;
+    if (!gameState || !gameState.systems || !currentPlayer) return;
     
     // Find current player's home system
     const homeSystem = Object.values(gameState.systems).find(
@@ -720,11 +720,19 @@ function App() {
       const viewportCenterX = 400; // Half of 800px viewBox width
       const viewportCenterY = 300; // Half of 600px viewBox height
       
+      // Apply zoom first, then calculate pan to center the home system
+      const newZoom = 1.5;
+      setMapZoom(newZoom);
+      
+      // Calculate pan with the new zoom applied
       setMapPan({ 
-        x: viewportCenterX - homeSystem.x * mapZoom, 
-        y: viewportCenterY - homeSystem.y * mapZoom 
+        x: viewportCenterX - homeSystem.x * newZoom, 
+        y: viewportCenterY - homeSystem.y * newZoom 
       });
-      setMapZoom(1.5);
+      
+      console.log(`Centered map on ${homeSystem.name} at (${homeSystem.x}, ${homeSystem.y}) for player ${currentPlayer}`);
+    } else {
+      console.log(`No home system found for player ${currentPlayer}`);
     }
   };
   
