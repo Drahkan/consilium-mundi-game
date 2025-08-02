@@ -122,6 +122,9 @@ backend:
         - working: true
           agent: "main"
           comment: "Fixed resource accumulation bug - resources now properly accumulate globally per player instead of being replaced each turn."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TEST PASSED: Verified CHON resources properly accumulate over 3 turns for all 4 players. Resources increase each turn instead of being replaced. Tested with build orders consuming resources - accumulation logic working correctly."
 
   - task: "Combat Reports System"
     implemented: true
@@ -134,6 +137,33 @@ backend:
         - working: true
           agent: "main"
           comment: "Enhanced combat reports to include turn information for better tracking and UI display."
+        - working: true
+          agent: "testing"
+          comment: "✅ VERIFIED: Combat reports system working correctly with turn information and proper battle resolution."
+
+  - task: "Auto-Submit Orders System"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TEST PASSED: Verified pending orders are automatically submitted during turn resolution without manual finalization. Tested with 2 movement orders and 2 build orders from different players - all processed correctly during turn resolution."
+
+  - task: "Map Generation and Centering"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TEST PASSED: Map centering logic working correctly. Home systems properly distributed with 100+ unit separation, all systems within proper boundaries (100% compliance), centering algorithm generates balanced galaxy layouts."
 
 frontend:
   - task: "Build Button State Management"
