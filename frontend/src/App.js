@@ -1299,63 +1299,69 @@ function App() {
   const renderOrdersPanel = () => {
     if (!selectedStarfleet || !gameState || !selectedSystem) return null;
     
-    const system = gameState.systems[selectedSystem];
-    const starfleet = system.starfleet_details.find(sf => sf.id === selectedStarfleet);
+    const starfleet = gameState.systems[selectedSystem]?.starfleet_details?.find(
+      sf => sf.id === selectedStarfleet
+    );
     
     if (!starfleet || starfleet.owner !== currentPlayer) return null;
     
+    // Get current order for this starfleet
+    const currentOrder = starfleetOrders[selectedStarfleet];
+    const currentOrderType = currentOrder?.order_type || 'hold';
+    
+    const system = gameState.systems[selectedSystem];
+    const connections = system.connections || [];
+
     return (
       <div className="orders-panel">
         <h4>Starfleet Orders</h4>
-        <p>Selected: {starfleet.id}</p>
+        <p>Starfleet in: {system.name}</p>
         
         <div className="order-buttons">
           <button 
             onClick={() => issueStarfleetOrder('hold')}
-            className="order-btn hold-btn"
+            className={`order-btn hold-btn ${currentOrderType === 'hold' ? 'selected' : ''}`}
           >
             Hold Position
           </button>
           
-          <div className="move-section">
-            <p>Move to:</p>
-            {system.connections.map(connId => {
-              const connSystem = gameState.systems[connId];
-              return (
-                <button
-                  key={connId}
-                  onClick={() => issueStarfleetOrder('move', connId)}
-                  className="order-btn move-btn"
-                >
-                  {connSystem.name}
-                </button>
-              );
-            })}
-          </div>
+          {connections.map(connId => {
+            const connSystem = gameState.systems[connId];
+            if (!connSystem) return null;
+            
+            const isSelected = currentOrderType === 'move' && currentOrder?.target_system === connId;
+            
+            return (
+              <button
+                key={connId}
+                onClick={() => issueStarfleetOrder('move', connId)}
+                className={`order-btn move-btn ${isSelected ? 'selected' : ''}`}
+              >
+                Move to {connSystem.name}
+              </button>
+            );
+          })}
+        </div>
 
+        {connections.length > 0 && (
           <div className="support-section">
-            <p>Support attacks on:</p>
-            {system.connections.map(connId => {
+            <p>Support Actions:</p>
+            {connections.map(connId => {
               const connSystem = gameState.systems[connId];
+              if (!connSystem) return null;
+              
+              const isSelected = currentOrderType === 'support' && currentOrder?.target_system === connId;
+              
               return (
                 <button
                   key={`support_${connId}`}
                   onClick={() => issueStarfleetOrder('support', connId)}
-                  className="order-btn support-btn"
+                  className={`order-btn support-btn ${isSelected ? 'selected' : ''}`}
                 >
-                  Support → {connSystem.name}
+                  Support {connSystem.name}
                 </button>
               );
             })}
-          </div>
-        </div>
-        
-        {Object.keys(starfleetOrders).length > 0 && (
-          <div className="submit-section">
-            <p>{Object.keys(starfleetOrders).length} movement orders pending</p>
-            <button onClick={submitOrders} className="submit-orders-btn">
-              Submit Movement Orders
-            </button>
           </div>
         )}
       </div>
