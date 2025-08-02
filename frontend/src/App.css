@@ -380,6 +380,13 @@ body {
   border-color: #4299e1;
 }
 
+.order-btn.selected {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%) !important;
+  border-color: #4299e1 !important;
+  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.3) !important;
+  transform: translateY(-1px);
+}
+
 .hold-btn {
   background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
 }
