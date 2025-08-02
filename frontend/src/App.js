@@ -471,12 +471,12 @@ function App() {
 
   // Submit build orders
   const submitBuildOrders = async () => {
-    if (!gameId || !currentPlayer) return;
+    if (!currentGame || !currentPlayer) return;
 
     try {
       const orders = Object.values(buildOrders);
       
-      const response = await fetch(`${API_BASE}/api/game/${gameId}/build-orders`, {
+      const response = await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
