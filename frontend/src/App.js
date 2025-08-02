@@ -817,7 +817,14 @@ function App() {
     }
   }, [gameState, currentPlayer]); // Trigger when gameState or currentPlayer changes
 
-  // Sync build orders when switching players
+  // Sync combat reports state when switching players
+  React.useEffect(() => {
+    if (currentPlayer) {
+      // Reset combat reports expansion state when switching players
+      setCombatReportsExpanded({});
+      setSeenCombatTurns(new Set());
+    }
+  }, [currentPlayer]);
   React.useEffect(() => {
     if (currentPlayer) {
       const currentPlayerOrders = playerBuildOrders[currentPlayer] || {};
