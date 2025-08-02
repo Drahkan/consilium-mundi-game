@@ -387,8 +387,37 @@ body {
   transform: translateY(-1px);
 }
 
-.hold-btn {
+.defend-btn {
   background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+  border-color: #38a169;
+}
+
+.defend-btn.selected {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
+  border-color: #48bb78 !important;
+  box-shadow: 0 0 0 2px rgba(72, 187, 120, 0.3) !important;
+}
+
+.move-btn {
+  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+  border-color: #ed8936;
+}
+
+.move-btn.selected {
+  background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%) !important;
+  border-color: #f6ad55 !important;
+  box-shadow: 0 0 0 2px rgba(246, 173, 85, 0.3) !important;
+}
+
+.support-btn {
+  background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+  border-color: #9f7aea;
+}
+
+.support-btn.selected {
+  background: linear-gradient(135deg, #b794f6 0%, #9f7aea 100%) !important;
+  border-color: #b794f6 !important;
+  box-shadow: 0 0 0 2px rgba(183, 148, 246, 0.3) !important;
 }
 
 .move-btn {
