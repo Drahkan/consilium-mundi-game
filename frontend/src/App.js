@@ -628,7 +628,7 @@ function App() {
       const playerStarfleetOrders = Object.keys(starfleetOrders).length > 0 && currentPlayer === playerId ? starfleetOrders : {};
       
       // Check if this player has pending build orders
-      const playerBuildOrders = playerBuildOrders[playerId] || {};
+      const currentPlayerBuildOrders = playerBuildOrders[playerId] || {};
       
       try {
         // Submit starfleet orders if any
@@ -645,8 +645,8 @@ function App() {
         }
         
         // Submit build orders if any
-        if (Object.keys(playerBuildOrders).length > 0) {
-          const orders = Object.values(playerBuildOrders);
+        if (Object.keys(currentPlayerBuildOrders).length > 0) {
+          const orders = Object.values(currentPlayerBuildOrders);
           await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
