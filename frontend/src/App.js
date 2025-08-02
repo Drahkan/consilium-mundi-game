@@ -523,10 +523,14 @@ function App() {
 
   // Submit build orders
   const submitBuildOrders = async () => {
-    if (!currentGame || !currentPlayer) return;
+    if (!currentGame || !currentPlayer) {
+      console.error('Missing currentGame or currentPlayer:', { currentGame, currentPlayer });
+      return;
+    }
 
     try {
       const orders = Object.values(buildOrders);
+      console.log('Submitting build orders:', orders);
       
       const response = await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
         method: 'POST',
@@ -537,12 +541,16 @@ function App() {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to submit build orders');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to submit build orders: ${response.status} - ${errorText}`);
+      }
 
       setBuildOrders({});
-      alert('Build orders submitted successfully!');
+      console.log('Build orders submitted successfully');
       
     } catch (err) {
+      console.error('Error submitting build orders:', err);
       setError(err.message);
     }
   };
