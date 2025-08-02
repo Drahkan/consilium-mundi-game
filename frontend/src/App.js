@@ -358,7 +358,11 @@ function App() {
                   const targetSystem = gameState.systems[order.target_system];
                   
                   return (
-                    <div key={index} className="text-sm text-gray-300 bg-gray-700 p-2 rounded">
+                    <div 
+                      key={index} 
+                      className="text-sm text-gray-300 bg-gray-700 p-2 rounded cursor-pointer hover:bg-gray-600 transition-colors"
+                      onClick={() => handleOrderClick('move', starfleetSystem?.id, order.starfleet_id)}
+                    >
                       Starfleet from {starfleetSystem?.name || 'Unknown'} → {order.order_type} → {targetSystem?.name || order.target_system}
                     </div>
                   );
