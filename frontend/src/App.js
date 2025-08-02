@@ -1369,7 +1369,7 @@ function App() {
     
     // Get current order for this starfleet
     const currentOrder = starfleetOrders[selectedStarfleet];
-    const currentOrderType = currentOrder?.order_type || 'hold';
+    const currentOrderType = currentOrder?.order_type || 'defend';
     
     const system = gameState.systems[selectedSystem];
     const connections = system.connections || [];
@@ -1381,10 +1381,10 @@ function App() {
         
         <div className="order-buttons">
           <button 
-            onClick={() => issueStarfleetOrder('hold')}
-            className={`order-btn hold-btn ${currentOrderType === 'hold' ? 'selected' : ''}`}
+            onClick={() => issueStarfleetOrder('defend')}
+            className={`order-btn defend-btn ${currentOrderType === 'defend' ? 'selected' : ''}`}
           >
-            Hold Position
+            Defend System
           </button>
           
           {connections.map(connId => {
@@ -1396,7 +1396,14 @@ function App() {
             return (
               <button
                 key={connId}
-                onClick={() => issueStarfleetOrder('move', connId)}
+                onClick={() => {
+                  // If clicking the same move order, act like Defend System
+                  if (isSelected) {
+                    issueStarfleetOrder('defend');
+                  } else {
+                    issueStarfleetOrder('move', connId);
+                  }
+                }}
                 className={`order-btn move-btn ${isSelected ? 'selected' : ''}`}
               >
                 Move to {connSystem.name}
@@ -1417,7 +1424,14 @@ function App() {
               return (
                 <button
                   key={`support_${connId}`}
-                  onClick={() => issueStarfleetOrder('support', connId)}
+                  onClick={() => {
+                    // If clicking the same support order, act like Defend System
+                    if (isSelected) {
+                      issueStarfleetOrder('defend');
+                    } else {
+                      issueStarfleetOrder('support', connId);
+                    }
+                  }}
                   className={`order-btn support-btn ${isSelected ? 'selected' : ''}`}
                 >
                   Support {connSystem.name}
