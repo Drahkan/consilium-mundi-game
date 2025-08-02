@@ -256,7 +256,36 @@ function App() {
     return currentResources;
   };
 
-  // Render order summary window
+  const handleOrderClick = (orderType, systemId, starfleetId = null) => {
+    // Close order summary
+    setShowOrderSummary(false);
+    
+    // Navigate to the system
+    if (systemId && gameState.systems[systemId]) {
+      const system = gameState.systems[systemId];
+      
+      // Center on the system
+      const viewportCenterX = 400;
+      const viewportCenterY = 300;
+      setMapPan({ 
+        x: viewportCenterX - system.x * mapZoom, 
+        y: viewportCenterY - system.y * mapZoom 
+      });
+      
+      // Select the system
+      setSelectedSystem(systemId);
+      
+      if (orderType === 'build') {
+        // Open build panel
+        setShowBuildPanel(true);
+        setSelectedStarfleet(null);
+      } else if (orderType === 'move' && starfleetId) {
+        // Select the starfleet
+        setSelectedStarfleet(starfleetId);
+        setShowBuildPanel(false);
+      }
+    }
+  };
   const renderOrderSummary = () => {
     if (!showOrderSummary || !gameState) return null;
     
