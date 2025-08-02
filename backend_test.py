@@ -823,7 +823,9 @@ def main():
         tester.test_starfleet_orders,
         tester.test_build_orders,
         tester.test_espionage_orders,
-        tester.test_turn_resolution,
+        tester.test_finalize_orders_button,
+        tester.test_resolve_turn_functionality,
+        tester.test_player_resource_initialization,
         tester.test_submit_action,
         tester.test_list_games
     ]
