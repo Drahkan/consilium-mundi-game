@@ -912,6 +912,13 @@ function App() {
     if (gameState && currentPlayer && gameState.systems) {
       centerHomeWorld();
       selectPlayerHomeSystem();
+      
+      // Force a re-render to ensure build buttons are properly calculated
+      setTimeout(() => {
+        if (gameState.player_resources) {
+          console.log('Player resources loaded:', gameState.player_resources);
+        }
+      }, 100);
     }
   }, [gameState, currentPlayer]); // Trigger when gameState or currentPlayer changes
 
