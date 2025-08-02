@@ -170,7 +170,7 @@ function App() {
     }
   };
 
-  // Issue starfleet order with proper highlighting
+  // Issue starfleet order with proper highlighting and no stacking
   const issueStarfleetOrder = (orderType, targetSystem = null, supportTarget = null) => {
     if (!selectedStarfleet) return;
 
@@ -184,14 +184,14 @@ function App() {
       support_target: supportTarget
     };
 
-    // Replace any existing order for this starfleet (only one order per starfleet)
+    // Use starfleet ID as key to ensure only one order per starfleet
     const orderKey = selectedStarfleet;
     
-    if (orderType === 'hold') {
-      // If holding, remove any existing order
+    if (orderType === 'defend') {
+      // If defending (default), remove any existing order
       delete newOrders[orderKey];
     } else {
-      // Set the new order
+      // Set the new order, replacing any existing order for this starfleet
       newOrders[orderKey] = order;
     }
 
