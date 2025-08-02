@@ -576,6 +576,12 @@ function App() {
     return player ? player.name : 'Unknown';
   };
 
+  const getPlayerNameWithColor = (playerId) => {
+    const playerName = getPlayerName(playerId);
+    const playerColor = getPlayerColor(playerId);
+    return { name: playerName, color: playerColor };
+  };
+
   // Map navigation functions
   const centerHomeWorld = () => {
     if (!gameState || !gameState.systems) return;
