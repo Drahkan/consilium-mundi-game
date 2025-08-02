@@ -882,15 +882,16 @@ body {
 }
 
 .build-btn.selected {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  color: white;
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  color: white !important;
+  pointer-events: auto !important;
 }
 
 .build-btn.disabled {
-  opacity: 0.5;
+  opacity: 0.5 !important;
   cursor: not-allowed !important;
   background: rgba(75, 85, 99, 0.3) !important;
-  pointer-events: none;
+  pointer-events: none !important;
 }
 
 .build-btn.disabled:hover {
