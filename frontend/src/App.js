@@ -1410,7 +1410,7 @@ function App() {
                 className="player-selector"
               >
                 {availablePlayers.map(player => (
-                  <option key={player.id} value={player.id}>
+                  <option key={player.id} value={player.id} style={{ color: getPlayerColor(player.id) }}>
                     {player.name}
                   </option>
                 ))}
