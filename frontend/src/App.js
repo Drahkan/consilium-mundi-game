@@ -383,7 +383,11 @@ function App() {
                 {pendingBuildOrders.map((order, index) => {
                   const system = gameState.systems[order.system_id];
                   return (
-                    <div key={index} className="text-sm text-gray-300 bg-gray-700 p-2 rounded">
+                    <div 
+                      key={index} 
+                      className="text-sm text-gray-300 bg-gray-700 p-2 rounded cursor-pointer hover:bg-gray-600 transition-colors"
+                      onClick={() => handleOrderClick('build', order.system_id)}
+                    >
                       Building {order.build_type.replace('_', ' ')} in {system?.name || 'Unknown System'}
                     </div>
                   );
