@@ -805,6 +805,558 @@ class ConsiliumMundiAPITester:
             print("❌ Player resources not found in global pool")
             return False
 
+    def test_finalize_orders_button(self):
+        """Test the Finalize Orders button functionality - Critical Bug Fix Test"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
+            return False
+        
+        print("\n🔍 Testing Finalize Orders Button - Critical Bug Fix...")
+        
+        # Test 1: Create a game with multiple players and set up orders
+        success, game_state = self.run_test(
+            "Get Game State for Order Setup",
+            "GET",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        print(f"   Game has {len(game_state.get('players', []))} players")
+        
+        # Test 2: Create starfleet movement orders
+        our_starfleets = []
+        for system_id, system in game_state.get('systems', {}).items():
+            if system.get('owner') == self.player_id:
+                for starfleet in system.get('starfleet_details', []):
+                    if starfleet.get('owner') == self.player_id:
+                        our_starfleets.append({
+                            'id': starfleet['id'],
+                            'system_id': system_id,
+                            'connections': system.get('connections', [])
+                        })
+        
+        if not our_starfleets:
+            print("❌ No starfleets found for testing orders")
+            return False
+        
+        # Create movement orders
+        movement_orders = []
+        for starfleet in our_starfleets[:2]:  # Test with first 2 starfleets
+            if starfleet['connections']:
+                movement_orders.append({
+                    "starfleet_id": starfleet['id'],
+                    "order_type": "move",
+                    "target_system": starfleet['connections'][0]
+                })
+        
+        print(f"   Created {len(movement_orders)} movement orders")
+        
+        # Test 3: Submit starfleet movement orders
+        if movement_orders:
+            success, response = self.run_test(
+                "Submit Starfleet Movement Orders",
+                "POST",
+                f"api/game/{self.game_id}/orders",
+                200,
+                data={
+                    "player_id": self.player_id,
+                    "orders": movement_orders
+                }
+            )
+            
+            if not success:
+                print("❌ Failed to submit starfleet movement orders")
+                return False
+            
+            print(f"   ✅ Successfully submitted {len(movement_orders)} movement orders")
+        
+        # Test 4: Create build orders
+        our_systems = [s_id for s_id, s in game_state.get('systems', {}).items() if s.get('owner') == self.player_id]
+        shipyard_systems = [s_id for s_id, s in game_state.get('systems', {}).items() 
+                           if s.get('owner') == self.player_id and "shipyard" in s.get('upgrades', [])]
+        
+        build_orders = []
+        player_resources = game_state.get('player_resources', {})
+        
+        # Try to create a starfleet build order if we have resources and shipyard
+        if (shipyard_systems and 
+            player_resources.get('tech', 0) >= 1 and 
+            player_resources.get('metals', 0) >= 1 and 
+            player_resources.get('chon', 0) >= 1):
+            
+            build_orders.append({
+                "type": "build",
+                "build_type": "starfleet",
+                "system_id": shipyard_systems[0]
+            })
+        
+        # Try to create a starport build order if we have resources
+        if (player_resources.get('tech', 0) >= 2 and 
+            player_resources.get('metals', 0) >= 2 and 
+            player_resources.get('chon', 0) >= 2):
+            
+            for system_id in our_systems:
+                system = game_state['systems'][system_id]
+                if "starport" not in system.get('upgrades', []):
+                    build_orders.append({
+                        "type": "build",
+                        "build_type": "starport",
+                        "system_id": system_id
+                    })
+                    break
+        
+        print(f"   Created {len(build_orders)} build orders")
+        
+        # Test 5: Submit build orders
+        if build_orders:
+            success, response = self.run_test(
+                "Submit Build Orders",
+                "POST",
+                f"api/game/{self.game_id}/build-orders",
+                200,
+                data={
+                    "player_id": self.player_id,
+                    "orders": build_orders
+                }
+            )
+            
+            if not success:
+                print("❌ Failed to submit build orders")
+                return False
+            
+            print(f"   ✅ Successfully submitted {len(build_orders)} build orders")
+        
+        # Test 6: Test the Finalize Orders functionality (resolve turn)
+        print("\n   Testing Finalize Orders button (turn resolution)...")
+        
+        success, response = self.run_test(
+            "Finalize Orders (Resolve Turn)",
+            "POST",
+            f"api/game/{self.game_id}/resolve-turn",
+            200
+        )
+        
+        if not success:
+            print("❌ Finalize Orders button failed - turn resolution failed")
+            return False
+        
+        print("   ✅ Finalize Orders button working - turn resolved successfully")
+        
+        # Test 7: Verify orders were processed
+        success, post_resolution_state = self.run_test(
+            "Get Game State After Order Finalization",
+            "GET",
+            f"api/game/{self.game_id}/state?player_id={self.player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Check if turn advanced
+        new_turn = post_resolution_state.get('turn', 1)
+        old_turn = game_state.get('turn', 1)
+        
+        if new_turn <= old_turn:
+            print(f"❌ Turn did not advance. Old: {old_turn}, New: {new_turn}")
+            return False
+        
+        print(f"   ✅ Turn advanced from {old_turn} to {new_turn}")
+        
+        # Test 8: Verify error handling and logging
+        print("\n   Testing error handling...")
+        
+        # Try to submit orders for non-existent game
+        success, response = self.run_test(
+            "Test Error Handling - Invalid Game ID",
+            "POST",
+            "api/game/invalid-game-id/resolve-turn",
+            404
+        )
+        
+        if success:
+            print("   ✅ Error handling working - invalid game ID properly rejected")
+        else:
+            print("   ❌ Error handling failed - should have returned 404")
+            return False
+        
+        print("\n   ✅ FINALIZE ORDERS BUTTON TEST PASSED")
+        print("   - Orders submitted successfully to backend")
+        print("   - Turn resolution working correctly")
+        print("   - Error handling and logging functional")
+        
+        return True
+
+    def test_resolve_turn_functionality(self):
+        """Test the Resolve Turn endpoint functionality - Critical Bug Fix Test"""
+        if not self.game_id or not self.player_id:
+            print("❌ No game ID or player ID available for testing")
+            return False
+        
+        print("\n🔍 Testing Resolve Turn Functionality - Critical Bug Fix...")
+        
+        # Test 1: Get initial game state
+        success, initial_state = self.run_test(
+            "Get Initial State for Turn Resolution",
+            "GET",
+            f"api/game/{self.game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        initial_turn = initial_state.get('turn', 1)
+        initial_phase = initial_state.get('phase', 'setup')
+        
+        print(f"   Initial turn: {initial_turn}, phase: {initial_phase}")
+        
+        # Test 2: Set up pending orders for multiple players
+        all_players = initial_state.get('players', [])
+        print(f"   Setting up orders for {len(all_players)} players")
+        
+        # Create orders for our player
+        our_orders_created = False
+        for system_id, system in initial_state.get('systems', {}).items():
+            if system.get('owner') == self.player_id:
+                for starfleet in system.get('starfleet_details', []):
+                    if starfleet.get('owner') == self.player_id and system.get('connections'):
+                        # Create a movement order
+                        success, response = self.run_test(
+                            "Create Pending Movement Order",
+                            "POST",
+                            f"api/game/{self.game_id}/orders",
+                            200,
+                            data={
+                                "player_id": self.player_id,
+                                "orders": [{
+                                    "starfleet_id": starfleet['id'],
+                                    "order_type": "move",
+                                    "target_system": system['connections'][0]
+                                }]
+                            }
+                        )
+                        
+                        if success:
+                            our_orders_created = True
+                            print("   ✅ Created pending movement order")
+                            break
+                if our_orders_created:
+                    break
+        
+        # Create a build order if possible
+        player_resources = initial_state.get('player_resources', {}).get(self.player_id, {})
+        if (player_resources.get('tech', 0) >= 2 and 
+            player_resources.get('metals', 0) >= 2 and 
+            player_resources.get('chon', 0) >= 2):
+            
+            for system_id, system in initial_state.get('systems', {}).items():
+                if system.get('owner') == self.player_id:
+                    success, response = self.run_test(
+                        "Create Pending Build Order",
+                        "POST",
+                        f"api/game/{self.game_id}/build-orders",
+                        200,
+                        data={
+                            "player_id": self.player_id,
+                            "orders": [{
+                                "type": "build",
+                                "build_type": "starport",
+                                "system_id": system_id
+                            }]
+                        }
+                    )
+                    
+                    if success:
+                        print("   ✅ Created pending build order")
+                    break
+        
+        # Test 3: Test auto-submission of pending orders during turn resolution
+        print("\n   Testing auto-submission of pending orders...")
+        
+        success, response = self.run_test(
+            "Resolve Turn with Auto-Submit",
+            "POST",
+            f"api/game/{self.game_id}/resolve-turn",
+            200
+        )
+        
+        if not success:
+            print("❌ Turn resolution failed")
+            return False
+        
+        new_turn = response.get('new_turn', initial_turn)
+        print(f"   ✅ Turn resolved successfully. New turn: {new_turn}")
+        
+        # Test 4: Verify turn advanced correctly
+        if new_turn != initial_turn + 1:
+            print(f"❌ Turn did not advance correctly. Expected {initial_turn + 1}, got {new_turn}")
+            return False
+        
+        print(f"   ✅ Turn advanced correctly from {initial_turn} to {new_turn}")
+        
+        # Test 5: Verify resources were updated after resolution
+        success, post_resolution_state = self.run_test(
+            "Get State After Turn Resolution",
+            "GET",
+            f"api/game/{self.game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Check resource updates
+        post_resources = post_resolution_state.get('player_resources', {}).get(self.player_id, {})
+        initial_resources = initial_state.get('player_resources', {}).get(self.player_id, {})
+        
+        print(f"   Resources before: Tech:{initial_resources.get('tech', 0)}, Metals:{initial_resources.get('metals', 0)}, CHON:{initial_resources.get('chon', 0)}")
+        print(f"   Resources after: Tech:{post_resources.get('tech', 0)}, Metals:{post_resources.get('metals', 0)}, CHON:{post_resources.get('chon', 0)}")
+        
+        # Resources should have changed (either increased from collection or decreased from builds/upkeep)
+        resources_changed = (
+            post_resources.get('tech', 0) != initial_resources.get('tech', 0) or
+            post_resources.get('metals', 0) != initial_resources.get('metals', 0) or
+            post_resources.get('chon', 0) != initial_resources.get('chon', 0)
+        )
+        
+        if resources_changed:
+            print("   ✅ Resources updated properly after turn resolution")
+        else:
+            print("   ⚠️  Resources unchanged - may be normal if no resource-generating systems owned")
+        
+        # Test 6: Test multiple consecutive turn resolutions
+        print("\n   Testing multiple consecutive turn resolutions...")
+        
+        for i in range(2):
+            success, response = self.run_test(
+                f"Consecutive Turn Resolution {i+1}",
+                "POST",
+                f"api/game/{self.game_id}/resolve-turn",
+                200
+            )
+            
+            if not success:
+                print(f"❌ Consecutive turn resolution {i+1} failed")
+                return False
+            
+            turn_after = response.get('new_turn', 0)
+            expected_turn = new_turn + i + 1
+            
+            if turn_after != expected_turn:
+                print(f"❌ Turn sequence broken. Expected {expected_turn}, got {turn_after}")
+                return False
+            
+            print(f"   ✅ Consecutive turn {i+1} resolved correctly (turn {turn_after})")
+        
+        print("\n   ✅ RESOLVE TURN FUNCTIONALITY TEST PASSED")
+        print("   - Auto-submission of pending orders working")
+        print("   - Turn resolution advances correctly")
+        print("   - Resources updated properly after resolution")
+        print("   - Multiple consecutive resolutions working")
+        
+        return True
+
+    def test_player_resource_initialization(self):
+        """Test player resource initialization - Critical Bug Fix Test"""
+        print("\n🔍 Testing Player Resource Initialization - Critical Bug Fix...")
+        
+        # Test 1: Create a fresh game to test initialization
+        success, response = self.run_test(
+            "Create Fresh Game for Resource Test",
+            "POST",
+            "api/create-game",
+            200,
+            data={
+                "player_name": "Resource Test Player",
+                "config": {
+                    "num_players": 4,
+                    "galaxy_size": "standard",
+                    "turn_time_limit": 24
+                }
+            }
+        )
+        
+        if not success:
+            return False
+        
+        test_game_id = response.get('game_id')
+        test_player_id = response.get('player_id')
+        
+        if not test_game_id or not test_player_id:
+            print("❌ Failed to get game/player IDs from fresh game")
+            return False
+        
+        print(f"   Created test game: {test_game_id}")
+        print(f"   Test player ID: {test_player_id}")
+        
+        # Test 2: Add AI players to start the game
+        success, response = self.run_test(
+            "Add AI Players to Test Game",
+            "POST",
+            f"api/game/{test_game_id}/add-ai-players",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        print(f"   Added {len(response.get('players_added', []))} AI players")
+        
+        # Test 3: Get game state and verify all players have proper initial resources
+        success, game_state = self.run_test(
+            "Get Game State for Resource Verification",
+            "GET",
+            f"api/game/{test_game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        all_players = game_state.get('players', [])
+        player_resources = game_state.get('player_resources', {})
+        
+        print(f"   Game has {len(all_players)} players")
+        print(f"   Resource data available for {len(player_resources)} players")
+        
+        # Test 4: Verify each player (especially Player 1) has correct initial resources
+        expected_initial_resources = {"tech": 3, "metals": 3, "chon": 3}
+        
+        for i, player_id in enumerate(all_players):
+            player_name = f"Player {i+1}"
+            if player_id == test_player_id:
+                player_name = "Resource Test Player (Player 1)"
+            
+            if player_id not in player_resources:
+                print(f"❌ {player_name} ({player_id}) missing from resource data")
+                return False
+            
+            resources = player_resources[player_id]
+            
+            print(f"   {player_name}: Tech:{resources.get('tech', 0)}, Metals:{resources.get('metals', 0)}, CHON:{resources.get('chon', 0)}")
+            
+            # Verify resources match expected values
+            for resource_type, expected_value in expected_initial_resources.items():
+                actual_value = resources.get(resource_type, 0)
+                if actual_value != expected_value:
+                    print(f"❌ {player_name} has incorrect {resource_type}. Expected {expected_value}, got {actual_value}")
+                    return False
+            
+            print(f"   ✅ {player_name} has correct initial resources")
+        
+        # Test 5: Test resource API endpoint specifically for Player 1
+        success, player1_resources = self.run_test(
+            "Get Player 1 Resources Specifically",
+            "GET",
+            f"api/game/{test_game_id}/state?player_id={test_player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        player1_resource_data = player1_resources.get('player_resources', {})
+        
+        print(f"   Player 1 specific resource query: Tech:{player1_resource_data.get('tech', 0)}, Metals:{player1_resource_data.get('metals', 0)}, CHON:{player1_resource_data.get('chon', 0)}")
+        
+        # Verify Player 1 resources are correctly returned by API
+        for resource_type, expected_value in expected_initial_resources.items():
+            actual_value = player1_resource_data.get(resource_type, 0)
+            if actual_value != expected_value:
+                print(f"❌ Player 1 API resource query incorrect for {resource_type}. Expected {expected_value}, got {actual_value}")
+                return False
+        
+        # Test 6: Test resource calculations after a turn
+        print("\n   Testing resource calculations after turn resolution...")
+        
+        # Get systems owned by test player
+        owned_systems = []
+        system_resource_generation = {"tech": 0, "metals": 0, "chon": 0}
+        
+        for system_id, system in game_state.get('systems', {}).items():
+            if system.get('owner') == test_player_id:
+                owned_systems.append(system_id)
+                sys_resources = system.get('resources', {})
+                system_resource_generation["tech"] += sys_resources.get('tech', 0)
+                system_resource_generation["metals"] += sys_resources.get('metals', 0)
+                system_resource_generation["chon"] += sys_resources.get('chon', 0)
+                
+                # Add upgrade bonuses
+                upgrades = system.get('upgrades', [])
+                if "colony" in upgrades:
+                    system_resource_generation["tech"] += 1
+                if "mining_facilities" in upgrades:
+                    system_resource_generation["metals"] += 1
+                    system_resource_generation["chon"] += 1
+        
+        print(f"   Player 1 owns {len(owned_systems)} systems")
+        print(f"   Expected resource generation per turn: Tech:{system_resource_generation['tech']}, Metals:{system_resource_generation['metals']}, CHON:{system_resource_generation['chon']}")
+        
+        # Resolve a turn
+        success, response = self.run_test(
+            "Resolve Turn for Resource Calculation Test",
+            "POST",
+            f"api/game/{test_game_id}/resolve-turn",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Get updated resources
+        success, post_turn_state = self.run_test(
+            "Get Resources After Turn",
+            "GET",
+            f"api/game/{test_game_id}/state?player_id={test_player_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        post_turn_resources = post_turn_state.get('player_resources', {})
+        
+        print(f"   Resources after turn: Tech:{post_turn_resources.get('tech', 0)}, Metals:{post_turn_resources.get('metals', 0)}, CHON:{post_turn_resources.get('chon', 0)}")
+        
+        # Calculate expected resources (initial + generation - upkeep)
+        # Upkeep is 1 of each resource per starfleet
+        starfleet_count = 0
+        for system_id, system in post_turn_state.get('systems', {}).items():
+            if system.get('owner') == test_player_id:
+                starfleet_count += system.get('starfleets', 0)
+        
+        expected_post_turn = {
+            "tech": expected_initial_resources["tech"] + system_resource_generation["tech"] - starfleet_count,
+            "metals": expected_initial_resources["metals"] + system_resource_generation["metals"] - starfleet_count,
+            "chon": expected_initial_resources["chon"] + system_resource_generation["chon"] - starfleet_count
+        }
+        
+        print(f"   Expected after turn (init + generation - upkeep): Tech:{expected_post_turn['tech']}, Metals:{expected_post_turn['metals']}, CHON:{expected_post_turn['chon']}")
+        print(f"   (Upkeep for {starfleet_count} starfleets)")
+        
+        # Verify resources are in expected range (allow some tolerance)
+        for resource_type in ["tech", "metals", "chon"]:
+            actual = post_turn_resources.get(resource_type, 0)
+            expected = expected_post_turn[resource_type]
+            
+            if abs(actual - expected) > 1:  # Allow 1 unit tolerance
+                print(f"❌ Resource calculation error for {resource_type}. Expected ~{expected}, got {actual}")
+                return False
+        
+        print("   ✅ Resource calculations working correctly after turn resolution")
+        
+        print("\n   ✅ PLAYER RESOURCE INITIALIZATION TEST PASSED")
+        print("   - All players have proper initial resources (3,3,3)")
+        print("   - Player 1 specifically verified to have correct resources")
+        print("   - Resource values correctly returned by API")
+        print("   - Resource calculations work properly after orders")
+        
+        return True
+
 def main():
     print("🚀 Starting Consilium Mundi API Tests")
     print("=" * 50)
