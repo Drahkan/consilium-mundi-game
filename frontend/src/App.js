@@ -617,7 +617,7 @@ function App() {
       alert(`Turn finalized for ${getPlayerName(currentPlayer)}!`);
       
       // Refresh game state
-      await loadGameState(currentGame);
+      await loadGameState(currentGame, currentPlayer);
       
     } catch (err) {
       console.error('Error in submitAllOrders:', err);
