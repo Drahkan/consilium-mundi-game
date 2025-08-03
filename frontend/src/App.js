@@ -90,14 +90,26 @@ function App() {
     }
   };
 
-  // Load game state
-  const loadGameState = async (gameId) => {
+  // Load game state with player-specific data
+  const loadGameState = async (gameId, playerId = null) => {
     try {
-      const response = await fetch(`${API_BASE}/api/game/${gameId}/state?player_id=${currentPlayer}`);
+      const playerParam = playerId || currentPlayer;
+      const url = playerParam 
+        ? `${API_BASE}/api/game/${gameId}/state?player_id=${playerParam}`
+        : `${API_BASE}/api/game/${gameId}/state`;
+        
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to load game state');
       
       const data = await response.json();
       setGameState(data);
+      
+      // Debug logging to check resources
+      if (data.player_resources) {
+        console.log('Player resources loaded:', data.player_resources);
+      } else {
+        console.warn('No player resources in game state');
+      }
     } catch (err) {
       setError(err.message);
     }
