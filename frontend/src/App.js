@@ -61,7 +61,7 @@ function App() {
       setCurrentPlayer(data.player_id);
       setTestingMode(true);
       
-      // Load game state
+      // Load initial game state WITH player_id to get resources
       await loadGameState(data.game_id);
       await loadGamePlayers(data.game_id);
       
@@ -73,7 +73,7 @@ function App() {
           });
           
           if (aiResponse.ok) {
-            // Refresh game state to show AI players
+            // Refresh game state to show AI players AND ensure resources are loaded
             await loadGameState(data.game_id);
             await loadGamePlayers(data.game_id);
             console.log('AI players added automatically');
