@@ -642,7 +642,7 @@ function App() {
       if (!response.ok) throw new Error('Failed to resolve turn');
 
       alert('Turn resolved! All pending orders have been automatically submitted.');
-      await loadGameState(currentGame);
+      await loadGameState(currentGame, currentPlayer);
       await loadGamePlayers(currentGame);
       
     } catch (err) {
