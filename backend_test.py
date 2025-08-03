@@ -1160,6 +1160,331 @@ class ConsiliumMundiAPITester:
         
         return True
 
+    def test_resource_accumulation_bug_comprehensive(self):
+        """COMPREHENSIVE TEST: Resource Accumulation Bug - Focus on Tech, Metals, and CHON accumulation over multiple turns"""
+        print("\n🔍 COMPREHENSIVE RESOURCE ACCUMULATION BUG TEST")
+        print("=" * 60)
+        
+        # Test 1: Create a fresh game with 4 players
+        print("\n📋 STEP 1: Creating fresh 4-player game...")
+        success, response = self.run_test(
+            "Create Fresh 4-Player Game",
+            "POST",
+            "api/create-game",
+            200,
+            data={
+                "player_name": "Resource Test Player 1",
+                "config": {
+                    "num_players": 4,
+                    "galaxy_size": "standard",
+                    "turn_time_limit": 24
+                }
+            }
+        )
+        
+        if not success:
+            return False
+        
+        test_game_id = response.get('game_id')
+        test_player_id = response.get('player_id')
+        
+        # Add AI players to complete the 4-player setup
+        success, response = self.run_test(
+            "Add 3 AI Players",
+            "POST",
+            f"api/game/{test_game_id}/add-ai-players",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        print(f"   ✅ Created 4-player game: {test_game_id}")
+        
+        # Test 2: Record initial state and resource values for all players
+        print("\n📋 STEP 2: Recording initial resource values for all 4 players...")
+        success, initial_state = self.run_test(
+            "Get Initial Game State",
+            "GET",
+            f"api/game/{test_game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        all_players = initial_state.get('players', [])
+        initial_player_resources = initial_state.get('player_resources', {})
+        
+        print(f"   Game has {len(all_players)} players")
+        
+        # Record initial resources for all players
+        player_resource_history = {}
+        for i, player_id in enumerate(all_players):
+            resources = initial_player_resources.get(player_id, {})
+            player_resource_history[player_id] = {
+                'name': f'Player {i+1}',
+                'history': [resources.copy()]
+            }
+            print(f"   Player {i+1} initial: Tech:{resources.get('tech', 0)}, Metals:{resources.get('metals', 0)}, CHON:{resources.get('chon', 0)}")
+        
+        # Test 3: Analyze each player's systems and expected production
+        print("\n📋 STEP 3: System-by-system analysis for each player...")
+        player_production = {}
+        
+        for i, player_id in enumerate(all_players):
+            owned_systems = []
+            base_production = {"tech": 0, "metals": 0, "chon": 0}
+            upgrade_bonuses = {"tech": 0, "metals": 0, "chon": 0}
+            
+            for system_id, system in initial_state.get('systems', {}).items():
+                if system.get('owner') == player_id:
+                    owned_systems.append(system_id)
+                    
+                    # Base resources from system
+                    sys_resources = system.get('resources', {})
+                    base_production["tech"] += sys_resources.get('tech', 0)
+                    base_production["metals"] += sys_resources.get('metals', 0)
+                    base_production["chon"] += sys_resources.get('chon', 0)
+                    
+                    # Upgrade bonuses
+                    upgrades = system.get('upgrades', [])
+                    if "colony" in upgrades:
+                        upgrade_bonuses["tech"] += 1
+                    if "mining_facilities" in upgrades:
+                        upgrade_bonuses["metals"] += 1
+                        upgrade_bonuses["chon"] += 1
+            
+            total_production = {
+                "tech": base_production["tech"] + upgrade_bonuses["tech"],
+                "metals": base_production["metals"] + upgrade_bonuses["metals"],
+                "chon": base_production["chon"] + upgrade_bonuses["chon"]
+            }
+            
+            player_production[player_id] = total_production
+            
+            print(f"   Player {i+1} owns {len(owned_systems)} systems")
+            print(f"     Base production: Tech:{base_production['tech']}, Metals:{base_production['metals']}, CHON:{base_production['chon']}")
+            print(f"     Upgrade bonuses: Tech:{upgrade_bonuses['tech']}, Metals:{upgrade_bonuses['metals']}, CHON:{upgrade_bonuses['chon']}")
+            print(f"     Total per turn: Tech:{total_production['tech']}, Metals:{total_production['metals']}, CHON:{total_production['chon']}")
+        
+        # Test 4: Turn 1 Resource Test
+        print("\n📋 STEP 4: TURN 1 RESOURCE TEST...")
+        print("   Resolving Turn 1...")
+        
+        success, response = self.run_test(
+            "Resolve Turn 1",
+            "POST",
+            f"api/game/{test_game_id}/resolve-turn",
+            200
+        )
+        
+        if not success:
+            print("❌ Failed to resolve Turn 1")
+            return False
+        
+        # Get state after Turn 1
+        success, turn1_state = self.run_test(
+            "Get State After Turn 1",
+            "GET",
+            f"api/game/{test_game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        turn1_resources = turn1_state.get('player_resources', {})
+        
+        print("   TURN 1 RESULTS:")
+        all_resources_increased = True
+        
+        for i, player_id in enumerate(all_players):
+            initial = player_resource_history[player_id]['history'][0]
+            current = turn1_resources.get(player_id, {})
+            expected_production = player_production[player_id]
+            
+            # Calculate expected resources (initial + production - upkeep)
+            # Upkeep is 1 of each resource per starfleet
+            starfleet_count = 0
+            for system_id, system in turn1_state.get('systems', {}).items():
+                if system.get('owner') == player_id:
+                    starfleet_count += system.get('starfleets', 0)
+            
+            expected = {
+                "tech": initial['tech'] + expected_production['tech'] - starfleet_count,
+                "metals": initial['metals'] + expected_production['metals'] - starfleet_count,
+                "chon": initial['chon'] + expected_production['chon'] - starfleet_count
+            }
+            
+            # Record in history
+            player_resource_history[player_id]['history'].append(current.copy())
+            
+            print(f"     Player {i+1}:")
+            print(f"       Before: Tech:{initial['tech']}, Metals:{initial['metals']}, CHON:{initial['chon']}")
+            print(f"       After:  Tech:{current.get('tech', 0)}, Metals:{current.get('metals', 0)}, CHON:{current.get('chon', 0)}")
+            print(f"       Expected: Tech:{expected['tech']}, Metals:{expected['metals']}, CHON:{expected['chon']} (after {starfleet_count} upkeep)")
+            
+            # Check if ALL THREE resource types increased (or at least didn't decrease unexpectedly)
+            tech_ok = current.get('tech', 0) >= expected['tech'] - 1  # Allow 1 unit tolerance
+            metals_ok = current.get('metals', 0) >= expected['metals'] - 1
+            chon_ok = current.get('chon', 0) >= expected['chon'] - 1
+            
+            if not (tech_ok and metals_ok and chon_ok):
+                print(f"       ❌ RESOURCE ACCUMULATION FAILED for Player {i+1}")
+                all_resources_increased = False
+            else:
+                print(f"       ✅ All resources accumulated correctly for Player {i+1}")
+        
+        if not all_resources_increased:
+            print("❌ TURN 1 RESOURCE TEST FAILED - Not all resources accumulated properly")
+            return False
+        
+        print("   ✅ TURN 1 RESOURCE TEST PASSED - All players' resources accumulated correctly")
+        
+        # Test 5: Turn 2 Resource Test
+        print("\n📋 STEP 5: TURN 2 RESOURCE TEST...")
+        print("   Resolving Turn 2...")
+        
+        success, response = self.run_test(
+            "Resolve Turn 2",
+            "POST",
+            f"api/game/{test_game_id}/resolve-turn",
+            200
+        )
+        
+        if not success:
+            print("❌ Failed to resolve Turn 2")
+            return False
+        
+        # Get state after Turn 2
+        success, turn2_state = self.run_test(
+            "Get State After Turn 2",
+            "GET",
+            f"api/game/{test_game_id}/state",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        turn2_resources = turn2_state.get('player_resources', {})
+        
+        print("   TURN 2 RESULTS:")
+        turn2_accumulation_ok = True
+        
+        for i, player_id in enumerate(all_players):
+            turn1_resources_player = player_resource_history[player_id]['history'][1]
+            current = turn2_resources.get(player_id, {})
+            expected_production = player_production[player_id]
+            
+            # Calculate expected resources from Turn 1 + production - upkeep
+            starfleet_count = 0
+            for system_id, system in turn2_state.get('systems', {}).items():
+                if system.get('owner') == player_id:
+                    starfleet_count += system.get('starfleets', 0)
+            
+            expected = {
+                "tech": turn1_resources_player['tech'] + expected_production['tech'] - starfleet_count,
+                "metals": turn1_resources_player['metals'] + expected_production['metals'] - starfleet_count,
+                "chon": turn1_resources_player['chon'] + expected_production['chon'] - starfleet_count
+            }
+            
+            # Record in history
+            player_resource_history[player_id]['history'].append(current.copy())
+            
+            print(f"     Player {i+1}:")
+            print(f"       Turn 1: Tech:{turn1_resources_player['tech']}, Metals:{turn1_resources_player['metals']}, CHON:{turn1_resources_player['chon']}")
+            print(f"       Turn 2: Tech:{current.get('tech', 0)}, Metals:{current.get('metals', 0)}, CHON:{current.get('chon', 0)}")
+            print(f"       Expected: Tech:{expected['tech']}, Metals:{expected['metals']}, CHON:{expected['chon']}")
+            
+            # Verify continued accumulation
+            tech_accumulated = current.get('tech', 0) >= expected['tech'] - 1
+            metals_accumulated = current.get('metals', 0) >= expected['metals'] - 1
+            chon_accumulated = current.get('chon', 0) >= expected['chon'] - 1
+            
+            if not (tech_accumulated and metals_accumulated and chon_accumulated):
+                print(f"       ❌ CONTINUED ACCUMULATION FAILED for Player {i+1}")
+                turn2_accumulation_ok = False
+            else:
+                print(f"       ✅ Continued accumulation working for Player {i+1}")
+        
+        if not turn2_accumulation_ok:
+            print("❌ TURN 2 RESOURCE TEST FAILED - Resources not continuing to accumulate")
+            return False
+        
+        print("   ✅ TURN 2 RESOURCE TEST PASSED - Resources continue to accumulate correctly")
+        
+        # Test 6: Specific Focus on Metals and CHON vs Tech
+        print("\n📋 STEP 6: SPECIFIC ANALYSIS - Metals and CHON vs Tech accumulation...")
+        
+        metals_chon_issues = []
+        for i, player_id in enumerate(all_players):
+            history = player_resource_history[player_id]['history']
+            
+            # Check if Metals and CHON are accumulating at the same rate as Tech
+            tech_increase = history[2]['tech'] - history[0]['tech']
+            metals_increase = history[2]['metals'] - history[0]['metals']
+            chon_increase = history[2]['chon'] - history[0]['chon']
+            
+            print(f"   Player {i+1} total increase over 2 turns:")
+            print(f"     Tech: +{tech_increase}")
+            print(f"     Metals: +{metals_increase}")
+            print(f"     CHON: +{chon_increase}")
+            
+            # Check for patterns where Metals/CHON might be lagging behind Tech
+            expected_production = player_production[player_id]
+            expected_tech_increase = expected_production['tech'] * 2
+            expected_metals_increase = expected_production['metals'] * 2
+            expected_chon_increase = expected_production['chon'] * 2
+            
+            if (metals_increase < expected_metals_increase - 2 or 
+                chon_increase < expected_chon_increase - 2):
+                metals_chon_issues.append(f"Player {i+1}")
+        
+        if metals_chon_issues:
+            print(f"   ⚠️  Potential issues with Metals/CHON accumulation for: {', '.join(metals_chon_issues)}")
+        else:
+            print("   ✅ Metals and CHON accumulating at expected rates for all players")
+        
+        # Test 7: Final Summary and Verification
+        print("\n📋 STEP 7: FINAL VERIFICATION SUMMARY...")
+        print("=" * 60)
+        
+        final_success = True
+        
+        for i, player_id in enumerate(all_players):
+            history = player_resource_history[player_id]['history']
+            initial = history[0]
+            final = history[2]
+            
+            print(f"   Player {i+1} FINAL SUMMARY:")
+            print(f"     Initial:  Tech:{initial['tech']}, Metals:{initial['metals']}, CHON:{initial['chon']}")
+            print(f"     After 2 turns: Tech:{final['tech']}, Metals:{final['metals']}, CHON:{final['chon']}")
+            
+            # Verify all resources increased
+            tech_increased = final['tech'] > initial['tech']
+            metals_increased = final['metals'] > initial['metals']
+            chon_increased = final['chon'] > initial['chon']
+            
+            if not (tech_increased and metals_increased and chon_increased):
+                print(f"     ❌ NOT ALL RESOURCES INCREASED for Player {i+1}")
+                final_success = False
+            else:
+                print(f"     ✅ ALL RESOURCES ACCUMULATED CORRECTLY for Player {i+1}")
+        
+        if final_success:
+            print("\n🎉 COMPREHENSIVE RESOURCE ACCUMULATION TEST PASSED!")
+            print("✅ Tech, Metals, and CHON all accumulate properly each turn")
+            print("✅ Resources accumulate (not replace) over multiple turns")
+            print("✅ All 4 players show consistent resource accumulation")
+            print("✅ System-by-system production calculations working correctly")
+            return True
+        else:
+            print("\n❌ COMPREHENSIVE RESOURCE ACCUMULATION TEST FAILED!")
+            print("❌ Resource accumulation bug still present")
+            return False
+
     def test_player_resource_initialization(self):
         """Test player resource initialization - Critical Bug Fix Test"""
         print("\n🔍 Testing Player Resource Initialization - Critical Bug Fix...")
