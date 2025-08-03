@@ -332,8 +332,8 @@ class GameEngine:
                 home_system.starfleets[starfleet.id] = starfleet
                 self.starfleets[starfleet.id] = starfleet
                 
-                # Add starport and shipyard to home system
-                home_system.upgrades = ["starport", "shipyard"]
+                # Add starport, shipyard, and colony to home system for better resource generation
+                home_system.upgrades = ["starport", "shipyard", "colony"]
     
     def submit_starfleet_orders(self, player_id: str, orders: List[StarfleetOrder]):
         """Submit starfleet orders for a player"""
