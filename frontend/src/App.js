@@ -687,6 +687,33 @@ function App() {
       }
     };
   };
+  // Confirm build order after warning
+  const confirmBuildOrder = () => {
+    if (!warningDetails) return;
+    
+    const { buildOrder } = warningDetails;
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
+    const newOrders = { ...currentBuildOrders };
+    const orderId = `${buildOrder.systemId}_${buildOrder.buildType}`;
+    
+    // Add the build order
+    newOrders[orderId] = {
+      type: "build",
+      build_type: buildOrder.buildType,
+      system_id: buildOrder.systemId
+    };
+    
+    updateCurrentPlayerBuildOrders(newOrders);
+    setShowResourceWarning(false);
+    setWarningDetails(null);
+  };
+
+  // Cancel build order from warning
+  const cancelBuildOrder = () => {
+    setShowResourceWarning(false);
+    setWarningDetails(null);
+  };
+
   const issueBuildOrder = (buildType, systemId) => {
     const currentBuildOrders = getCurrentPlayerBuildOrders();
     const newOrders = { ...currentBuildOrders };
