@@ -2136,6 +2136,10 @@ function App() {
             {error && <div className="error-message">{error}</div>}
           </div>
         </div>
+        
+        {/* Dialog overlays */}
+        {renderResourceWarningDialog()}
+        {renderResourceImpactDialog()}
       </div>
     </div>
   );
