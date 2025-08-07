@@ -102,13 +102,72 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Fix multiple critical bugs in Consilium Mundi game:
-1. Systems do not increase CHON each turn - resource pooling unclear
-2. Combat Reports window stacking and visibility issues
-3. Build buttons allow multiple clicks without enough CHON
-4. Need order confirmation popup ("are you sure?")
-5. Need detailed pending orders window with summary
-6. Need map navigation (zoom/pan, center home world)
+user_problem_statement: Implement warning system for build orders and resource impact summary:
+1. Warning system when build orders will cause starfleet destruction due to insufficient resources
+2. Detailed resource impact summary when finalizing orders 
+3. Show resource income/expense breakdown with starfleet maintenance costs
+
+backend:
+  - task: "Resource Surplus at Game Start"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Already implemented in server.py line 321: players start with 4 of each resource (base 3 + 1 surplus per starfleet)"
+
+  - task: "Colony Upgrade on All Home Systems"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Already implemented in server.py line 336: home systems have colony upgrade regardless of settings"
+
+frontend:
+  - task: "Warning System for Build Orders"
+    implemented: true
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Implemented comprehensive warning system with calculateResourceImpact function, warning dialogs, and integration with build order system"
+
+  - task: "Resource Impact Summary on Order Finalization"
+    implemented: true
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Implemented detailed resource impact dialog showing income, expenses, upkeep, and potential starfleet destruction"
+
+  - task: "Dialog UI Components"
+    implemented: true
+    working: false
+    file: "App.js, App.css"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "main"
+          comment: "Added renderResourceWarningDialog and renderResourceImpactDialog components with proper styling and integration"
 
 backend:
   - task: "Resource Management Bug Fix"
