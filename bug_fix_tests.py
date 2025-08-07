@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class BugFixTester:
-    def __init__(self, base_url="https://1bc598af-b8b5-494f-b21a-848ca019a707.preview.emergentagent.com"):
+    def __init__(self, base_url="https://18d182da-2006-4bb2-8ba2-3211e7d63b45.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0

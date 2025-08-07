@@ -1,44 +1,74 @@
 <analysis>
-The previous AI engineer effectively initiated the Consilium Mundi game development, adopting an agile, hardest part first approach. They successfully delivered the core aha moment by implementing galaxy generation, multiplayer architecture with a testing UI, starfleet movement, combat, building, and espionage systems. The user consistently acted as a PM/tester, providing detailed bug reports and feature requests iteratively. The engineer demonstrated strong debugging skills by systematically addressing UI glitches, starfleet order issues, critical galaxy generation connectivity, build order logic, and combat system errors. They diligently cross-referenced the design document and even external PHP code for algorithm insights. The immediate focus before this summary was to fix the resource management system, based on clarification from the design document that resources should be globally pooled.
+The AI engineer successfully progressed the Consilium Mundi game development from MVP to a more polished state. They adopted an iterative, bug-fixing, and feature-adding approach based on continuous user feedback. The user consistently provided detailed bug reports and new feature requests, acting as a product manager and tester. The engineer demonstrated strong debugging skills, systematically addressing complex issues across both frontend and backend, including resource management, combat reports, build order logic, map navigation, and player-specific data handling. Key decisions involved refactoring state management to be player-specific and adjusting game balance parameters (e.g., home system upgrades for resource generation). The engineer also streamlined the testing workflow by automating AI player creation and home system selection. The work concluded mid-implementation of resource surplus and warning system features.
 </analysis>
 
 <product_requirements>
-The user requested a phone/tablet game app, Consilium Mundi, a complex turn-based multiplayer strategy game. It blends Diplomacy's simultaneous movement with Catan's resource trading, set in space, with the core aha moment being the simultaneous turn resolution. The app requires a testing UI for multi-player simulation, a visual aesthetic akin to Stellaris/Endless Space board games, and cross-platform web app support for iOS/Android (mobile-first), Steam, and Chromebooks, built on a server-client architecture.
+The user requested Consilium Mundi, a turn-based multiplayer space strategy game blending Diplomacy and Catan. Key features include simultaneous turn resolution, a random galaxy map with interconnected systems, a 3-resource economy (Tech, Metals, CHON), starfleet movement, combat, system upgrades (Starports, Shipyards), a 6-phase turn system, and an espionage system. The application requires a testing UI, a Stellaris/Endless Space aesthetic, and cross-platform web app support (mobile-first).
 
-The AI engineer initially built core features including a random galaxy map with interconnected systems, a 3-resource economy (Tech, Metals, CHON), basic ownership, starfleet movement (wormhole-based), simultaneous turn resolution, combat calculations, system upgrades (Starports, Shipyards), a 6-phase turn system, and resource upkeep. An espionage system was also implemented. Key bug fixes included UI shaking on hover, starfleet orders not being actionable, isolated galaxy systems, build order accumulation, incorrect tooltip logic for requirements, and Submit All Orders affecting all players. The combat system was refined to allow automatic capture of uncontrolled systems.
+Previously implemented core features included galaxy generation, starfleet movement/combat, resource upkeep, building, and espionage. The recent work focused on critical bug fixes: CHON resource pooling (global per player), per-player combat reports (with turn info, collapsing, colorization), proper build button state management (graying out if unaffordable, preventing multi-builds), Submit All Orders confirmation, and dynamic map navigation (zoom/pan, auto-center home world, visibility constraints). The user also requested streamlining the game setup by auto-adding AI players and auto-selecting the home system on player switch. The latest requests include ensuring all player names are color-coded, double-click system centering, clickable orders in the summary, fixing combat report expansion issues, ensuring orders auto-submit, improving build button cancel functionality, and refining starfleet order management (highlighting, single order per starfleet, Defend System instead of Hold Position).
 </product_requirements>
 
 <key_technical_concepts>
-- **Full-Stack Architecture**: React frontend, FastAPI backend, MongoDB database.
-- **Game Mechanics**: Simultaneous turn resolution, galaxy generation, 3-resource economy (Tech, Metals, CHON), starfleet movement/combat, building, espionage, support orders, victory conditions.
-- **UI/UX**: Tailwind CSS, Shadcn UI components, responsive design, glass-morphism, specific color/gradient rules.
-- **Environment**: Kubernetes, supervisor for service control, environment variables (, ),  prefix for backend routes.
-- **Development Workflow**: Agile methodology, iterative bug fixing, , .
+- **Full-Stack Architecture**: React (frontend), FastAPI (backend), MongoDB (database).
+- **Game Mechanics**: Simultaneous turn resolution, galaxy generation, 3-resource economy (Tech, Metals, CHON), starfleet movement/combat, building, espionage, support orders, victory conditions, upkeep.
+- **UI/UX**: Tailwind CSS, Shadcn UI components, responsive design, state management (React , ), interactive map (SVG manipulation).
+- **Environment**: Kubernetes, Supervisor, environment variables,  prefix for backend routes.
+- **Development Workflow**: Agile, iterative bug fixing, , , .
 </key_technical_concepts>
 
 <code_architecture>
 The application is structured into distinct frontend and backend directories:
 
-- ****: This file contains the FastAPI application, handling game state management, core game logic, API endpoints for actions (create game, submit orders, etc.), turn resolution, combat, and resource calculation.
-    - Changes: Initial setup for galaxy generation, starfleet, resources, combat, building, espionage. Later, refined  to correctly populate  based on . Implemented a new, sophisticated galaxy generation algorithm derived from PHP code to ensure connectivity. Fixed  to correctly handle automatic system capture and combat strength. Added logic for support orders, enhanced combat, and victory conditions.
-- ****: The main React component responsible for rendering the game UI, handling user input, and communicating with the backend.
-    - Changes: Initial galaxy map rendering, player switching, resource display, and interactive elements for systems and starfleets. Implemented the building and espionage interfaces. Fixed the starfleet orders bug by ensuring  were properly utilized. Addressed build order accumulation by modifying  for correct toggling and clearing. Corrected tooltip logic for build requirements. Made order clearing player-specific for testing. Added UI for support orders, combat reports, and victory display.
-- ****: Contains styling for the React application, leveraging Tailwind CSS for a modern, space-themed aesthetic.
-    - Changes: Initial styling for game map, UI panels, buttons, and responsive design. Fixed a UI shaking bug by removing problematic  from hover effects. Added styles for selected build button states and new UI elements (combat reports, victory overlay).
+- ****: This FastAPI application manages game state, core logic, and API endpoints.
+    - **Summary**: Central to game logic, handling galaxy generation, turn resolution phases (resource, upkeep, combat), and processing player orders.
+    - **Changes**: Initialized resource pooling globally ( was changed to accumulate, not replace). Implemented a  endpoint for automated game setup. Refined  for automatic captures and  for resource consumption. Modified initial home system upgrades to include colony for balanced resource generation.
+- ****: The main React component rendering the game UI and interacting with the backend.
+    - **Summary**: Handles all user interactions, displays game state, manages local UI state (selected systems, fleets, orders, modal visibility), and sends API requests.
+    - **Changes**:
+        - **Resource Management**: Logic for calculating available resources for building was updated to reflect pending orders.
+        - **Build System**: Modified  to correctly manage available resources. Build button state logic () was refined to prevent over-building and fix cancel button issues. Implemented per-player  state () to prevent sharing across players.
+        - **Order Submission**:  and  functions were updated for correct order finalization and clearing, and to use player-specific data. Added are you sure? confirmation dialog for Finalize Orders. Changed button text from Submit All Orders to Finalize Orders.
+        - **Combat Reports**: Enhanced  to include turn information, collapsing functionality, and dynamic colorization of text based on player colors and outcome. Implemented per-player filtering for combat reports.
+        - **Map Navigation**: Added state variables (, ) and functions (, , , , ) for zoom and pan. Implemented double-click to center system. Adjusted map constraints to prevent panning off-screen.
+        - **Game Setup/UX**: Automated AI player addition on game creation. Removed the Add AI Players button from UI. Implemented auto-selection and centering of the current player's home system upon player switch.
+        - **Starfleet Orders**: Refined  to properly handle order replacement (not stacking). Changed Hold Position to Defend System. Implemented visual highlighting for selected starfleet orders and different button colors.
+        - **UI Polish**: Applied player-specific colors to player names in the dropdown and combat reports. Added an Order Summary window with clickable orders.
+- ****: Contains styling for the React application.
+    - **Summary**: Defines the visual theme and layout for the game UI.
+    - **Changes**: Added styles for  build button states,  states (including  to fix cursor issues), new UI elements (combat reports, victory overlay), and specific color rules for starfleet order buttons (, , ).
+
 </code_architecture>
 
 <pending_tasks>
-- **Combat Reports**: Improve stacking, add turn info, allow collapsing, auto-collapse seen turns, colorize text by player/outcome.
-- **Order Confirmation**: Implement are you sure? pop-up for Submit All Orders or Finalize Orders button with resume option.
-- **Order Summary**: Detailed pending orders window listing all actions, summarizing, collapsible, displaying post-turn resources/builds.
-- **Map Navigation**: Implement zoom (cursor-centered) and pan (click-and-drag), auto-center home world, prevent empty views.
-- **Player Communication System**: This is the next major feature explicitly requested by the user after current bugs are resolved.
+- **Player Communication System**: This remains a major feature for future development.
+- **Resource Surplus Display**: Displaying how turn actions affect per-turn resource increases/decreases.
+- **Warning System**: Implement a warning when setting build orders if they risk starfleet destruction due to insufficient resources.
 </pending_tasks>
 
 <current_work>
-The AI engineer is currently working on addressing a critical **Resource Management Bug**. The user observed that CHON resources were not increasing each turn as expected and sought clarification on resource pooling (per system vs. global player pool). The AI engineer initiated this fix by first consulting the  design document. The document explicitly states that At the beginning of each turn, each player receives a lump sum of resources —Tech, Metals and CHON—equal to the cumulative individual resources provided by each solar system they control. This clarifies that resources are **pooled globally per player** per turn, not stored locally per system. The AI engineer is now in the process of implementing  in the backend () to correctly aggregate resources into a global player pool each turn, aligning with the design document's specification.
+The AI engineer was most recently working on refining the game's resource economy and user feedback system.
+
+**Completed Fixes (leading up to current work):**
+1.  **CHON Collection**: Backend  fixed to accumulate, not replace, resources.
+2.  **Auto-Submit Orders**: Backend  logic updated to automatically process pending orders.
+3.  **First Player Centering**: Frontend  adjusted for more accurate initial centering.
+4.  **Build Button Cancel Functionality**: CSS () and  logic fixed to allow proper cancellation of build orders.
+5.  **Starfleet Order Management**: Frontend logic updated to ensure orders replace instead of stacking, and Hold Position was changed to Defend System.
+6.  **Button Color Differentiation**: Starfleet order buttons (, , ) were given distinct colors for better UX.
+7.  **Double-click to Cancel**: Clicking the same starfleet order twice now correctly cancels it.
+8.  **Finalize Orders Button**: Backend and frontend logic confirmed to work, submitting orders correctly.
+9.  **Player 1 Build Button State**: Fixed resource loading timing on initial game load to correctly enable build buttons for Player 1.
+10. **Resource Balance**: Identified and fixed a bug where home systems only had  and  upgrades, leading to zero net CHON/Metals gain. Added  upgrade to home systems in  to provide a +1 Tech bonus, explaining why Tech was previously the only resource increasing.
+
+**Immediate Current Work:**
+The user provided new design adjustments:
+1.  **Universal Colony Upgrade**: Confirmed that all home systems, regardless of game settings, should start with a colony upgrade. The engineer has already implemented this.
+2.  **Initial Resource Surplus**: Each player should start with a surplus of 1 of each resource per starfleet they begin with, to alleviate immediate upkeep pressure. This was next on the implementation list, and the engineer stated Resource Surplus Implementation - Done.
+3.  **Warning System for Starfleet Destruction Risk**: Implement a warning pop-up if build orders will lead to insufficient resources, potentially causing starfleet destruction. This also extends to showing a detailed summary of resource changes (income/upkeep) when finalizing orders. The engineer was in the process of adding the warning logic to the frontend build system.
+
+The work concluded with the AI engineer starting to implement the warning system, specifically by adding the warning logic to the frontend build system.
 </current_work>
 
 <optional_next_step>
-Fix the Resource Management Bug by ensuring resources (Tech, Metals, CHON) are correctly pooled globally for each player at the start of every turn, as per the design document.
+Add warning logic to the frontend build system for starfleet destruction risk due to resource deficits.
 </optional_next_step>
