@@ -898,6 +898,239 @@ function App() {
     setWarningDetails(null);
   };
 
+  // Render resource warning dialog
+  const renderResourceWarningDialog = () => {
+    if (!showResourceWarning || !warningDetails || !warningDetails.resourceImpact) return null;
+    
+    const { resourceImpact } = warningDetails;
+    const isIndividualBuild = warningDetails.buildOrder !== null;
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+          <div className="flex items-center mb-4">
+            <div className="text-red-400 mr-3 text-2xl">⚠️</div>
+            <h3 className="text-xl font-bold text-red-400">
+              {isIndividualBuild ? 'Build Order Warning' : 'Resource Shortage Warning'}
+            </h3>
+          </div>
+          
+          <div className="mb-4 text-white">
+            <p className="mb-2">
+              {isIndividualBuild 
+                ? `Building ${warningDetails.buildOrder.buildType.replace('_', ' ')} will cause resource shortages that may result in starfleet destruction.`
+                : 'Your current orders will cause resource shortages that may result in starfleet destruction.'
+              }
+            </p>
+            <p className="text-red-300 font-semibold">
+              {resourceImpact.starfleetDestructionCount} starfleet(s) may be destroyed due to insufficient upkeep resources.
+            </p>
+          </div>
+
+          {/* Resource Impact Details */}
+          <div className="mb-4">
+            <h4 className="text-lg font-semibold text-yellow-400 mb-2">Resource Impact Analysis</h4>
+            <div className="grid grid-cols-4 gap-4 text-sm bg-gray-700 p-3 rounded">
+              <div className="text-center">
+                <div className="font-semibold text-gray-300">Resource</div>
+                <div className="text-white">Current</div>
+                <div className="text-red-400">Build Costs</div>
+                <div className="text-green-400">Income</div>
+                <div className="text-red-400">Upkeep</div>
+                <div className="text-yellow-400">After Turn</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-blue-400">Tech</div>
+                <div>{resourceImpact.currentResources.tech}</div>
+                <div>-{resourceImpact.buildCosts.tech}</div>
+                <div>+{resourceImpact.income.tech}</div>
+                <div>-{resourceImpact.upkeep.tech}</div>
+                <div className={resourceImpact.resourcesAfterTurn.tech < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {resourceImpact.resourcesAfterTurn.tech}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-400">Metals</div>
+                <div>{resourceImpact.currentResources.metals}</div>
+                <div>-{resourceImpact.buildCosts.metals}</div>
+                <div>+{resourceImpact.income.metals}</div>
+                <div>-{resourceImpact.upkeep.metals}</div>
+                <div className={resourceImpact.resourcesAfterTurn.metals < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {resourceImpact.resourcesAfterTurn.metals}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-green-400">CHON</div>
+                <div>{resourceImpact.currentResources.chon}</div>
+                <div>-{resourceImpact.buildCosts.chon}</div>
+                <div>+{resourceImpact.income.chon}</div>
+                <div>-{resourceImpact.upkeep.chon}</div>
+                <div className={resourceImpact.resourcesAfterTurn.chon < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {resourceImpact.resourcesAfterTurn.chon}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Starfleet Impact */}
+          <div className="mb-4 bg-red-900 bg-opacity-30 border border-red-700 p-3 rounded">
+            <h4 className="text-red-400 font-semibold mb-1">Starfleet Impact</h4>
+            <p className="text-sm text-gray-200">
+              Current starfleets: {resourceImpact.currentStarfleetCount}
+            </p>
+            {resourceImpact.newStarfleets > 0 && (
+              <p className="text-sm text-blue-300">
+                New starfleets from builds: +{resourceImpact.newStarfleets}
+              </p>
+            )}
+            <p className="text-sm text-white">
+              Total starfleets: {resourceImpact.totalStarfleetCount}
+            </p>
+            <p className="text-sm text-red-300 font-semibold">
+              Starfleets at risk: {resourceImpact.starfleetDestructionCount}
+            </p>
+            <p className="text-sm text-yellow-300">
+              Surviving starfleets: {resourceImpact.survivingStarfleets}
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3">
+            <button 
+              onClick={isIndividualBuild ? cancelBuildOrder : cancelOrderSubmission}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={isIndividualBuild ? confirmBuildOrder : confirmOrderSubmission}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500"
+            >
+              Proceed Anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render resource impact summary (without warnings)
+  const renderResourceImpactDialog = () => {
+    if (!showResourceImpact || !warningDetails || !warningDetails.resourceImpact) return null;
+    
+    const { resourceImpact } = warningDetails;
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+          <div className="flex items-center mb-4">
+            <div className="text-blue-400 mr-3 text-2xl">📊</div>
+            <h3 className="text-xl font-bold text-blue-400">Turn Resource Summary</h3>
+          </div>
+          
+          <div className="mb-4 text-white">
+            <p>Review the resource impact of your orders before finalizing your turn.</p>
+          </div>
+
+          {/* Resource Impact Details */}
+          <div className="mb-4">
+            <div className="grid grid-cols-4 gap-4 text-sm bg-gray-700 p-3 rounded">
+              <div className="text-center">
+                <div className="font-semibold text-gray-300">Resource</div>
+                <div className="text-white">Current</div>
+                <div className="text-red-400">Build Costs</div>
+                <div className="text-green-400">Income</div>
+                <div className="text-red-400">Upkeep</div>
+                <div className="text-yellow-400">Net Change</div>
+                <div className="text-blue-400">After Turn</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-blue-400">Tech</div>
+                <div>{resourceImpact.currentResources.tech}</div>
+                <div>-{resourceImpact.buildCosts.tech}</div>
+                <div>+{resourceImpact.income.tech}</div>
+                <div>-{resourceImpact.upkeep.tech}</div>
+                <div className={resourceImpact.netChange.tech >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {resourceImpact.netChange.tech >= 0 ? '+' : ''}{resourceImpact.netChange.tech}
+                </div>
+                <div className={resourceImpact.resourcesAfterTurn.tech < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {resourceImpact.resourcesAfterTurn.tech}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-400">Metals</div>
+                <div>{resourceImpact.currentResources.metals}</div>
+                <div>-{resourceImpact.buildCosts.metals}</div>
+                <div>+{resourceImpact.income.metals}</div>
+                <div>-{resourceImpact.upkeep.metals}</div>
+                <div className={resourceImpact.netChange.metals >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {resourceImpact.netChange.metals >= 0 ? '+' : ''}{resourceImpact.netChange.metals}
+                </div>
+                <div className={resourceImpact.resourcesAfterTurn.metals < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {resourceImpact.resourcesAfterTurn.metals}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-green-400">CHON</div>
+                <div>{resourceImpact.currentResources.chon}</div>
+                <div>-{resourceImpact.buildCosts.chon}</div>
+                <div>+{resourceImpact.income.chon}</div>
+                <div>-{resourceImpact.upkeep.chon}</div>
+                <div className={resourceImpact.netChange.chon >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {resourceImpact.netChange.chon >= 0 ? '+' : ''}{resourceImpact.netChange.chon}
+                </div>
+                <div className={resourceImpact.resourcesAfterTurn.chon < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {resourceImpact.resourcesAfterTurn.chon}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Starfleet Status */}
+          <div className="mb-4 bg-blue-900 bg-opacity-30 border border-blue-700 p-3 rounded">
+            <h4 className="text-blue-400 font-semibold mb-1">Starfleet Status</h4>
+            <p className="text-sm text-gray-200">
+              Current starfleets: {resourceImpact.currentStarfleetCount}
+            </p>
+            {resourceImpact.newStarfleets > 0 && (
+              <p className="text-sm text-green-300">
+                New starfleets from builds: +{resourceImpact.newStarfleets}
+              </p>
+            )}
+            <p className="text-sm text-white">
+              Total starfleets after builds: {resourceImpact.totalStarfleetCount}
+            </p>
+            {resourceImpact.hasWarning && (
+              <p className="text-sm text-red-300 font-semibold">
+                ⚠️ {resourceImpact.starfleetDestructionCount} starfleet(s) may be destroyed due to upkeep shortfall!
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3">
+            <button 
+              onClick={cancelOrderSubmission}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
+            >
+              Review Orders
+            </button>
+            <button 
+              onClick={confirmOrderSubmission}
+              className={`px-4 py-2 rounded text-white ${
+                resourceImpact.hasWarning 
+                  ? 'bg-red-600 hover:bg-red-500' 
+                  : 'bg-green-600 hover:bg-green-500'
+              }`}
+            >
+              {resourceImpact.hasWarning ? 'Finalize Despite Risks' : 'Finalize Orders'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Resolve turn (for testing)
   const resolveTurn = async () => {
     if (!currentGame) return;
