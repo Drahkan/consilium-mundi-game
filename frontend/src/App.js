@@ -251,6 +251,19 @@ function App() {
     setBuildOrders(orders);
   };
 
+  // Get build cost for a specific build type
+  const getBuildCost = (buildType) => {
+    const buildCosts = {
+      'starfleet': { tech: 1, metals: 1, chon: 1 },
+      'starport': { tech: 2, metals: 2, chon: 2 },
+      'shipyard': { tech: 3, metals: 3, chon: 1 },
+      'colony': { tech: 0, metals: 2, chon: 2 },
+      'mining_facilities': { tech: 2, metals: 2, chon: 1 },
+      'wormhole_generator': { tech: 6, metals: 2, chon: 0 }
+    };
+    return buildCosts[buildType] || { tech: 0, metals: 0, chon: 0 };
+  };
+
   // Calculate available resources after pending build orders
   const calculateAvailableResources = () => {
     if (!gameState || !gameState.player_resources || !currentPlayer) {
