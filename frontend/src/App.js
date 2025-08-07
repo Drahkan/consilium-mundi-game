@@ -489,7 +489,98 @@ function App() {
     );
   };
 
-  // Issue build order
+  // Calculate if build orders would cause starfleet destruction
+  const calculateStarfleetDestructionRisk = () => {
+    if (!gameState || !gameState.player_resources || !currentPlayer) {
+      return { atRisk: false, details: {} };
+    }
+    
+    // Calculate post-turn resources after all pending orders
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
+    const buildCosts = { tech: 0, metals: 0, chon: 0 };
+    
+    // Sum up all build costs
+    Object.values(currentBuildOrders).forEach(order => {
+      const costs = {
+        'starfleet': { tech: 1, metals: 1, chon: 1 },
+        'starport': { tech: 2, metals: 2, chon: 2 },
+        'shipyard': { tech: 3, metals: 3, chon: 1 },
+        'colony': { tech: 0, metals: 2, chon: 2 },
+        'mining_facilities': { tech: 2, metals: 2, chon: 1 },
+        'wormhole_generator': { tech: 6, metals: 2, chon: 0 }
+      };
+      
+      const cost = costs[order.build_type];
+      if (cost) {
+        buildCosts.tech += cost.tech;
+        buildCosts.metals += cost.metals;
+        buildCosts.chon += cost.chon;
+      }
+    });
+    
+    // Calculate income from systems
+    let income = { tech: 0, metals: 0, chon: 0 };
+    Object.values(gameState.systems || {}).forEach(system => {
+      if (system.owner === currentPlayer) {
+        income.tech += system.resources.tech;
+        income.metals += system.resources.metals;
+        income.chon += system.resources.chon;
+        
+        // Add upgrade bonuses
+        if (system.upgrades.includes('colony')) income.tech += 1;
+        if (system.upgrades.includes('mining_facilities')) {
+          income.metals += 1;
+          income.chon += 1;
+        }
+      }
+    });
+    
+    // Count current and planned starfleets
+    let currentStarfleets = 0;
+    let plannedStarfleets = 0;
+    
+    Object.values(gameState.systems || {}).forEach(system => {
+      if (system.starfleet_details) {
+        currentStarfleets += system.starfleet_details.filter(sf => sf.owner === currentPlayer).length;
+      }
+    });
+    
+    // Count starfleet build orders
+    Object.values(currentBuildOrders).forEach(order => {
+      if (order.build_type === 'starfleet') {
+        plannedStarfleets++;
+      }
+    });
+    
+    const totalStarfleets = currentStarfleets + plannedStarfleets;
+    
+    // Calculate net resources after income - build costs - upkeep
+    const netResources = {
+      tech: gameState.player_resources.tech + income.tech - buildCosts.tech - totalStarfleets,
+      metals: gameState.player_resources.metals + income.metals - buildCosts.metals - totalStarfleets,
+      chon: gameState.player_resources.chon + income.chon - buildCosts.chon - totalStarfleets
+    };
+    
+    // Check if any resource would go negative, requiring starfleet destruction
+    const wouldDestroyStarfleets = netResources.tech < 0 || netResources.metals < 0 || netResources.chon < 0;
+    
+    return {
+      atRisk: wouldDestroyStarfleets,
+      details: {
+        currentStarfleets,
+        plannedStarfleets,
+        totalStarfleets,
+        income,
+        buildCosts,
+        netResources,
+        starfleetsAtRisk: wouldDestroyStarfleets ? Math.max(
+          Math.abs(Math.min(netResources.tech, 0)),
+          Math.abs(Math.min(netResources.metals, 0)),
+          Math.abs(Math.min(netResources.chon, 0))
+        ) : 0
+      }
+    };
+  };
   const issueBuildOrder = (buildType, systemId) => {
     const currentBuildOrders = getCurrentPlayerBuildOrders();
     const newOrders = { ...currentBuildOrders };
