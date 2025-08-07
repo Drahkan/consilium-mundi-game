@@ -22,6 +22,9 @@ function App() {
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
   const [showOrderSummary, setShowOrderSummary] = useState(false);
+  const [showResourceWarning, setShowResourceWarning] = useState(false);
+  const [warningDetails, setWarningDetails] = useState(null);
+  const [showResourceImpact, setShowResourceImpact] = useState(false);
   
   // Map navigation state
   const [mapZoom, setMapZoom] = useState(1);
