@@ -701,33 +701,49 @@ function App() {
 
     // Check if player can afford this build order
     const availableResources = calculateAvailableResources();
-    const buildCosts = {
-      'starfleet': { tech: 1, metals: 1, chon: 1 },
-      'starport': { tech: 2, metals: 2, chon: 2 },
-      'shipyard': { tech: 3, metals: 3, chon: 1 },
-      'colony': { tech: 0, metals: 2, chon: 2 },
-      'mining_facilities': { tech: 2, metals: 2, chon: 1 },
-      'wormhole_generator': { tech: 6, metals: 2, chon: 0 }
-    };
+    const cost = getBuildCost(buildType);
     
-    const cost = buildCosts[buildType];
-    if (cost && (
-      availableResources.tech < cost.tech ||
-      availableResources.metals < cost.metals ||
-      availableResources.chon < cost.chon
-    )) {
+    if (availableResources.tech < cost.tech ||
+        availableResources.metals < cost.metals ||
+        availableResources.chon < cost.chon
+    ) {
       // Can't afford this build order
       return;
     }
 
-    // Add the build order
-    newOrders[orderId] = {
-      type: "build",
-      build_type: buildType,
-      system_id: systemId
+    // Add the build order temporarily to check for warnings
+    const tempOrders = {
+      ...newOrders,
+      [orderId]: {
+        type: "build",
+        build_type: buildType,
+        system_id: systemId
+      }
     };
+
+    // Update the player build orders temporarily for warning calculation
+    const oldPlayerOrders = { ...playerBuildOrders };
+    const tempPlayerOrders = { ...playerBuildOrders, [currentPlayer]: tempOrders };
+    setPlayerBuildOrders(tempPlayerOrders);
+
+    // Check for warnings with the temporary build order
+    const resourceImpact = calculateResourceImpact();
     
-    updateCurrentPlayerBuildOrders(newOrders);
+    // Restore the original state
+    setPlayerBuildOrders(oldPlayerOrders);
+
+    if (resourceImpact && resourceImpact.hasWarning) {
+      // Show warning dialog
+      setWarningDetails({
+        buildOrder: { buildType, systemId },
+        resourceImpact: resourceImpact
+      });
+      setShowResourceWarning(true);
+      return;
+    }
+
+    // No warnings, proceed with the build order
+    updateCurrentPlayerBuildOrders(tempOrders);
   };
 
   // Submit build orders
