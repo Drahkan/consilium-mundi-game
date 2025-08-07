@@ -317,8 +317,8 @@ class GameEngine:
                 home_system = home_systems[i]
                 home_system.owner = player_id
                 
-                # Initialize player resources
-                self.player_resources[player_id] = {"tech": 3, "metals": 3, "chon": 3}
+                # Initialize player resources with surplus (base 3 + 1 surplus per starfleet)
+                self.player_resources[player_id] = {"tech": 4, "metals": 4, "chon": 4}
                 self.player_orders[player_id] = []
                 
                 # Create initial starfleet
