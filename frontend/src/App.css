@@ -934,3 +934,101 @@ body {
   transform: none !important;
   box-shadow: none !important;
 }
+
+/* Resource Warning and Impact Dialog Styles */
+.warning-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.warning-dialog-content {
+  background-color: #1f2937;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 42rem;
+  width: 100%;
+  margin: 0 1rem;
+  max-height: 24rem;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  font-size: 0.875rem;
+  background-color: #374151;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+}
+
+.resource-cell {
+  text-align: center;
+}
+
+.starfleet-impact-section {
+  background-color: rgba(153, 27, 27, 0.3);
+  border: 1px solid rgb(185, 28, 28);
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+}
+
+.resource-summary-section {
+  background-color: rgba(30, 58, 138, 0.3);
+  border: 1px solid rgb(59, 130, 246);
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+}
+
+/* Dialog button styles */
+.dialog-button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dialog-button-cancel {
+  background-color: #4b5563;
+  color: white;
+}
+
+.dialog-button-cancel:hover {
+  background-color: #6b7280;
+}
+
+.dialog-button-proceed {
+  background-color: #dc2626;
+  color: white;
+}
+
+.dialog-button-proceed:hover {
+  background-color: #b91c1c;
+}
+
+.dialog-button-confirm {
+  background-color: #16a34a;
+  color: white;
+}
+
+.dialog-button-confirm:hover {
+  background-color: #15803d;
+}
+
+.dialog-button-warning {
+  background-color: #dc2626;
+  color: white;
+}
+
+.dialog-button-warning:hover {
+  background-color: #b91c1c;
+}
