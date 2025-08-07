@@ -266,34 +266,124 @@ function App() {
 
   // Calculate available resources after pending build orders
   const calculateAvailableResources = () => {
-    if (!gameState || !gameState.player_resources || !currentPlayer) {
+    if (!gameState || !gameState.player_resources) {
       return { tech: 0, metals: 0, chon: 0 };
     }
     
+    const currentPlayerOrders = getCurrentPlayerBuildOrders();
     const currentResources = { ...gameState.player_resources };
-    const currentBuildOrders = getCurrentPlayerBuildOrders();
     
-    // Subtract costs of pending build orders
-    Object.values(currentBuildOrders).forEach(order => {
-      const buildType = order.build_type;
-      const buildOptions = [
-        { type: 'starfleet', cost: { tech: 1, metals: 1, chon: 1 } },
-        { type: 'starport', cost: { tech: 2, metals: 2, chon: 2 } },
-        { type: 'shipyard', cost: { tech: 3, metals: 3, chon: 1 } },
-        { type: 'colony', cost: { tech: 0, metals: 2, chon: 2 } },
-        { type: 'mining_facilities', cost: { tech: 2, metals: 2, chon: 1 } },
-        { type: 'wormhole_generator', cost: { tech: 6, metals: 2, chon: 0 } }
-      ];
-      
-      const option = buildOptions.find(opt => opt.type === buildType);
-      if (option) {
-        currentResources.tech = Math.max(0, currentResources.tech - option.cost.tech);
-        currentResources.metals = Math.max(0, currentResources.metals - option.cost.metals);
-        currentResources.chon = Math.max(0, currentResources.chon - option.cost.chon);
-      }
+    // Subtract resources from pending build orders
+    Object.values(currentPlayerOrders).forEach(order => {
+      const costs = getBuildCost(order.build_type);
+      currentResources.tech -= costs.tech;
+      currentResources.metals -= costs.metals;
+      currentResources.chon -= costs.chon;
     });
     
-    return currentResources;
+    return {
+      tech: Math.max(0, currentResources.tech),
+      metals: Math.max(0, currentResources.metals),
+      chon: Math.max(0, currentResources.chon)
+    };
+  };
+
+  // Calculate resource impact after turn resolution
+  const calculateResourceImpact = () => {
+    if (!gameState || !gameState.systems || !gameState.player_resources) {
+      return null;
+    }
+
+    const currentPlayerOrders = getCurrentPlayerBuildOrders();
+    let resourcesAfterBuilding = { ...gameState.player_resources };
+    
+    // Subtract build costs
+    Object.values(currentPlayerOrders).forEach(order => {
+      const costs = getBuildCost(order.build_type);
+      resourcesAfterBuilding.tech -= costs.tech;
+      resourcesAfterBuilding.metals -= costs.metals;
+      resourcesAfterBuilding.chon -= costs.chon;
+    });
+
+    // Calculate income from owned systems (next turn's resource phase)
+    let income = { tech: 0, metals: 0, chon: 0 };
+    Object.values(gameState.systems).forEach(system => {
+      if (system.owner === currentPlayer) {
+        income.tech += system.resources.tech;
+        income.metals += system.resources.metals;
+        income.chon += system.resources.chon;
+        
+        // Add bonus from upgrades
+        if (system.upgrades.includes('colony')) {
+          income.tech += 1;
+        }
+        if (system.upgrades.includes('mining_facilities')) {
+          income.metals += 1;
+          income.chon += 1;
+        }
+      }
+    });
+
+    // Calculate current starfleets count + new starfleets from build orders
+    let currentStarfleetCount = 0;
+    Object.values(gameState.systems).forEach(system => {
+      if (system.starfleet_details) {
+        currentStarfleetCount += system.starfleet_details.filter(sf => sf.owner === currentPlayer).length;
+      }
+    });
+
+    // Add starfleets being built
+    const newStarfleets = Object.values(currentPlayerOrders).filter(order => order.build_type === 'starfleet').length;
+    const totalStarfleetCount = currentStarfleetCount + newStarfleets;
+    
+    // Calculate upkeep (1 of each resource per starfleet)
+    const upkeep = { 
+      tech: totalStarfleetCount, 
+      metals: totalStarfleetCount, 
+      chon: totalStarfleetCount 
+    };
+
+    // Calculate net change
+    const netChange = {
+      tech: income.tech - upkeep.tech,
+      metals: income.metals - upkeep.metals,
+      chon: income.chon - upkeep.chon
+    };
+
+    // Calculate resources after full turn resolution
+    const resourcesAfterTurn = {
+      tech: resourcesAfterBuilding.tech + netChange.tech,
+      metals: resourcesAfterBuilding.metals + netChange.metals,
+      chon: resourcesAfterBuilding.chon + netChange.chon
+    };
+
+    // Check for potential starfleet destruction
+    const minResource = Math.min(resourcesAfterTurn.tech, resourcesAfterTurn.metals, resourcesAfterTurn.chon);
+    const starfleetDestructionCount = minResource < 0 ? Math.abs(minResource) : 0;
+    const survivingStarfleets = Math.max(0, totalStarfleetCount - starfleetDestructionCount);
+
+    return {
+      currentResources: { ...gameState.player_resources },
+      buildCosts: Object.values(currentPlayerOrders).reduce((total, order) => {
+        const costs = getBuildCost(order.build_type);
+        return {
+          tech: total.tech + costs.tech,
+          metals: total.metals + costs.metals,
+          chon: total.chon + costs.chon
+        };
+      }, { tech: 0, metals: 0, chon: 0 }),
+      resourcesAfterBuilding,
+      income,
+      upkeep,
+      netChange,
+      resourcesAfterTurn,
+      currentStarfleetCount,
+      newStarfleets,
+      totalStarfleetCount,
+      starfleetDestructionCount,
+      survivingStarfleets,
+      hasWarning: starfleetDestructionCount > 0
+    };
   };
 
   const handleOrderClick = (orderType, systemId, starfleetId = null) => {
