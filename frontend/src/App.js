@@ -827,7 +827,20 @@ function App() {
       return;
     }
     
-    // Order confirmation popup
+    // Calculate resource impact and show detailed confirmation
+    const resourceImpact = calculateResourceImpact();
+    
+    if (resourceImpact && resourceImpact.hasWarning) {
+      // Show detailed resource impact with warning
+      setWarningDetails({
+        buildOrder: null, // This is for finalize orders, not individual build
+        resourceImpact: resourceImpact
+      });
+      setShowResourceImpact(true);
+      return;
+    }
+
+    // Show regular confirmation
     const confirmationMessage = `Are you sure you want to finalize your turn?\n\n` +
       `${movementCount} movement orders and ${buildCount} build orders will be submitted.\n` +
       `This will end your turn and you cannot make changes until the next turn.`;
@@ -836,7 +849,14 @@ function App() {
       return;
     }
     
+    await executeOrderSubmission();
+  };
+
+  // Execute the actual order submission
+  const executeOrderSubmission = async () => {
     try {
+      const currentBuildOrders = getCurrentPlayerBuildOrders();
+      
       // Submit starfleet orders first
       if (Object.keys(starfleetOrders).length > 0) {
         console.log('Submitting starfleet orders...');
@@ -860,9 +880,22 @@ function App() {
       await loadGameState(currentGame, currentPlayer);
       
     } catch (err) {
-      console.error('Error in submitAllOrders:', err);
+      console.error('Error in executeOrderSubmission:', err);
       setError(err.message);
     }
+  };
+
+  // Confirm order submission after impact review
+  const confirmOrderSubmission = () => {
+    setShowResourceImpact(false);
+    setWarningDetails(null);
+    executeOrderSubmission();
+  };
+
+  // Cancel order submission
+  const cancelOrderSubmission = () => {
+    setShowResourceImpact(false);
+    setWarningDetails(null);
   };
 
   // Resolve turn (for testing)
