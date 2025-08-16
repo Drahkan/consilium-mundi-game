@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 class GameDAO:
     def __init__(self, db):
         self.db = db
-        self.coll = db.games if db else None
+        self.coll = db.games if db is not None else None
 
     async def save_game(self, game_id: str, engine_dict: Dict[str, Any], players_index: List[Dict[str, Any]]):
         if not self.coll:
