@@ -17,7 +17,7 @@ class GameDAO:
         self.coll = db.games if db is not None else None
 
     async def save_game(self, game_id: str, engine_dict: Dict[str, Any], players_index: List[Dict[str, Any]]):
-        if not self.coll:
+        if self.coll is None:
             return
         doc = {
             "_id": game_id,
@@ -28,12 +28,12 @@ class GameDAO:
         await self.coll.replace_one({"_id": game_id}, doc, upsert=True)
 
     async def load_game(self, game_id: str) -> Optional[Dict[str, Any]]:
-        if not self.coll:
+        if self.coll is None:
             return None
         return await self.coll.find_one({"_id": game_id})
 
     async def list_games_info(self) -> List[Dict[str, Any]]:
-        if not self.coll:
+        if self.coll is None:
             return []
         cursor = self.coll.find({}, {"engine.current_turn": 1, "engine.phase": 1, "engine.config.num_players": 1})
         results: List[Dict[str, Any]] = []
