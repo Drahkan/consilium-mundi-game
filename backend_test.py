@@ -243,6 +243,84 @@ class ConsiliumMundiAPITester:
             self.log_test("List Games", False, f"Exception: {str(e)}")
             return False
 
+    def test_lobby_start(self):
+        """Test the new lobby start endpoint"""
+        if not self.game_id:
+            self.log_test("Lobby Start", False, "No game_id available")
+            return False
+            
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/lobby/{self.game_id}/start",
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                
+                # Validate response structure
+                required_fields = ['status', 'phase']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    success = False
+                    details = f"Missing fields: {missing_fields}"
+                else:
+                    details = f"Status: {data.get('status')}, Phase: {data.get('phase')}"
+                    
+                    # Check if phase is 'activity' as expected
+                    if data.get('phase') != 'activity':
+                        details += f" (Expected 'activity', got '{data.get('phase')}')"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+                
+            self.log_test("Lobby Start", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Lobby Start", False, f"Exception: {str(e)}")
+            return False
+
+    def test_login_endpoint(self):
+        """Test the new dev login endpoint"""
+        try:
+            payload = {"name": "Test Player"}
+            
+            response = requests.post(
+                f"{self.base_url}/api/login",
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                
+                # Validate response structure
+                required_fields = ['token', 'name']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    success = False
+                    details = f"Missing fields: {missing_fields}"
+                else:
+                    token = data.get('token', '')
+                    name = data.get('name', '')
+                    details = f"Token: {token[:8]}..., Name: {name}"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+                
+            self.log_test("Login Endpoint", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Login Endpoint", False, f"Exception: {str(e)}")
+            return False
+
     def run_all_tests(self):
         """Run all backend tests in sequence"""
         print("🚀 Starting Consilium Mundi Backend API Tests")
