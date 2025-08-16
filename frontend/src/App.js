@@ -2064,7 +2064,7 @@ function App() {
           {/* Dev/Testing controls */}
           {(testingMode || devMode) && (
             <div className="testing-controls">
-              <label>Testing Mode:</label>
+              <label>Dev/Testing Mode:</label>
               <select 
                 value={currentPlayer || ''} 
                 onChange={(e) => switchPlayer(e.target.value)}
