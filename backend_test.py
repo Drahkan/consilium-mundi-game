@@ -334,6 +334,8 @@ class ConsiliumMundiAPITester:
             self.test_get_game_state,
             self.test_get_game_players,
             self.test_add_ai_players,
+            self.test_lobby_start,  # New test for lobby start
+            self.test_login_endpoint,  # New test for login
             self.test_list_games
         ]
         
