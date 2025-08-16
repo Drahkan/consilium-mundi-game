@@ -12,7 +12,7 @@ import json
 # New imports for Phase 1 persistence
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import timezone
-from .persistence import GameDAO  # type: ignore
+from persistence import GameDAO
 
 app = FastAPI()
 
