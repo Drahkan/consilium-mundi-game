@@ -2092,6 +2092,9 @@ function App() {
                 </button>
               )}
               
+              <button onClick={toggleDevMode} className="dev-toggle-btn" title="Toggle Dev Mode">{devMode ? 'Disable' : 'Enable'} Dev Mode</button>
+              <button onClick={startLobby} className="start-lobby-btn" title="Force start lobby (dev)">Start Lobby</button>
+
               <button 
                 onClick={centerHomeWorld}
                 className="center-home-btn"
