@@ -101,3 +101,71 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Transfer full Consilium Mundi repo into active app, preserve env vars, run under supervisor, and verify warning system works.
+
+backend:
+  - task: "Sync Consilium Mundi backend/server.py"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Replaced backend/server.py with repo version. Supervisor restarted. Health confirmed."
+  - task: "API basic smoke test"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "curl POST /api/create-game returned game_id and player_id. GET state and players succeeded."
+
+frontend:
+  - task: "Sync Consilium Mundi frontend App.js/App.css and src"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Synced full src and styles. Supervisor restarted. UI loads at provided URL. Landing screenshot captured."
+  - task: "Basic UI flow"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Verified landing loads. Next: create game, auto-add AI, open build panel, verify warning dialogs show as per resource impact."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 2
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Create game from UI and verify game state loads"
+    - "Open a home system, place build orders, verify resource warning/impact dialogs"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Repo synced into active /app. Services restarted via supervisor. Backend curl tests passed. Landing screenshot saved during automation run. Proceed with UI flow validations."
