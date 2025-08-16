@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 class ConsiliumMundiAPITester:
-    def __init__(self, base_url="https://space-empire-game-1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://569b636b-003b-4f01-871f-d973706ff103.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
