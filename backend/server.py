@@ -8,6 +8,13 @@ import random
 import math
 from datetime import datetime
 import json
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load backend .env (protected by platform; do not modify values)
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
 
 # New imports for Phase 1 persistence
 from motor.motor_asyncio import AsyncIOMotorClient
