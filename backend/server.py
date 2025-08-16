@@ -922,6 +922,33 @@ async def list_games():
         ]
     }
 
+@app.post("/api/lobby/{game_id}/start")
+async def start_lobby(game_id: str):
+    # Force start a lobby by creating initial starfleets and setting phase to activity.
+    # Safe to call multiple times; no-op if already started.
+    if game_id not in games and _dao:
+        doc = await _dao.load_game(game_id)
+        if doc:
+            eng = GameEngine.from_dict(doc.get("engine", {}))
+            games[game_id] = eng
+            for entry in doc.get("players_index", []):
+                players[entry["id"]] = entry
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    if game.phase != "activity" and len(game.players) > 0:
+        game.create_initial_starfleets()
+        game.phase = "activity"
+    if _dao:
+        await _dao.save_game(game_id, game.to_dict(), _players_index_for_game(game_id))
+    return {"status": "started", "phase": game.phase}
+
+@app.post("/api/login")
+async def login(payload: Dict[str, Any]):
+    name = (payload or {}).get("name") or "Player"
+    token = str(uuid.uuid4())
+    return {"token": token, "name": name}
+
 @app.get("/")
 async def root():
     return {"message": "Consilium Mundi Game Server", "status": "running"}
