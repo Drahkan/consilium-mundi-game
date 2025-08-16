@@ -132,6 +132,25 @@ function App() {
   };
 
   // Add AI players for testing
+  const [devMode, setDevMode] = useState(() => {
+    try { return localStorage.getItem('devMode') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try {
+      if (devMode) localStorage.setItem('devMode','1'); else localStorage.removeItem('devMode');
+    } catch {}
+  }, [devMode]);
+
+  const toggleDevMode = () => setDevMode(v => !v);
+
+  const startLobby = async () => {
+    if (!currentGame) return;
+    try {
+      await fetch(`${API_BASE}/api/lobby/${currentGame}/start`, { method: 'POST' });
+      await loadGameState(currentGame, currentPlayer);
+    } catch (e) { console.warn('Failed to start lobby', e); }
+  };
+
   const addAIPlayers = async () => {
     if (!currentGame) return;
 
