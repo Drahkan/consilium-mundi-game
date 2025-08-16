@@ -37,7 +37,7 @@ MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME", "test_database")
 _mongo_client = AsyncIOMotorClient(MONGO_URL) if MONGO_URL else None
 _db = _mongo_client[DB_NAME] if _mongo_client else None
-_dao = GameDAO(_db) if _db else None
+_dao = GameDAO(_db) if _db is not None else None
 
 # Game State Storage (in-memory cache; persisted via DAO when available)
 games: Dict[str, Any] = {}
