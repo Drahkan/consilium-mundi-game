@@ -2061,8 +2061,8 @@ function App() {
             </span>
           </div>
           
-          {/* Testing controls */}
-          {testingMode && (
+          {/* Dev/Testing controls */}
+          {(testingMode || devMode) && (
             <div className="testing-controls">
               <label>Testing Mode:</label>
               <select 
