@@ -975,9 +975,17 @@ async def lobby_create(payload: Dict[str, Any]):
     create = await create_game(request)
     game_id = create["game_id"]
     player_id = create["player_id"]
-    # Create join code
+    # Create join code and use it as a seed for deterministic map for this lobby
     code = _make_join_code()
     join_codes[code] = game_id
+    # Regenerate galaxy deterministically with join code as seed so maps differ across lobbies
+    game = games.get(game_id)
+    if game:
+        game.systems = {}
+        game.starfleets = {}
+        game.generate_galaxy(seed=code)
+        if _dao:
+            await _dao.save_game(game_id, game.to_dict(), _players_index_for_game(game_id))
     # Create session token
     token = str(uuid.uuid4())
     session_tokens[token] = {"game_id": game_id, "player_id": player_id, "name": name}
