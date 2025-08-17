@@ -38,6 +38,47 @@ function App() {
   const [joinCode, setJoinCode] = useState('');
   const [showLobbyScreen, setShowLobbyScreen] = useState(false);
 
+  const [lobbyPlayers, setLobbyPlayers] = useState([]);
+  const [lobbyPhase, setLobbyPhase] = useState('setup');
+  const [copied, setCopied] = useState(false);
+
+  const copyJoinCode = async () => {
+    try {
+      if (lobby?.join_code) {
+        await navigator.clipboard.writeText(lobby.join_code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    } catch (e) { console.warn('Clipboard error', e); }
+  };
+
+  const fetchLobbyStatus = async (gid, pid) => {
+    try {
+      const resp = await fetch(`${API_BASE}/api/lobby/${gid}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setLobby(l => ({ ...(l || {}), join_code: data.join_code }));
+        setLobbyPlayers(data.players || []);
+      }
+      // Also read phase from game state
+      const st = await fetch(`${API_BASE}/api/game/${gid}/state?player_id=${pid}`);
+      if (st.ok) {
+        const sdata = await st.json();
+        setLobbyPhase(sdata.phase || 'setup');
+      }
+    } catch (e) {
+      console.warn('Failed to fetch lobby status', e);
+    }
+  };
+
+  useEffect(() => {
+    if (showLobbyScreen && lobby?.game_id && lobby?.player_id) {
+      fetchLobbyStatus(lobby.game_id, lobby.player_id);
+      const id = setInterval(() => fetchLobbyStatus(lobby.game_id, lobby.player_id), 2000);
+      return () => clearInterval(id);
+    }
+  }, [showLobbyScreen, lobby?.game_id, lobby?.player_id]);
+
   const createLobby = async () => {
     if (!playerName.trim()) { setError('Please enter a player name'); return; }
     setLoading(true); setError(null);
