@@ -232,8 +232,13 @@ function App() {
   const startLobby = async () => {
     if (!currentGame) return;
     try {
-      await fetch(`${API_BASE}/api/lobby/${currentGame}/start`, { method: 'POST' });
-      await loadGameState(currentGame, currentPlayer);
+      const resp = await fetch(`${API_BASE}/api/lobby/${currentGame}/start`, { method: 'POST' });
+      if (resp.ok) {
+        await loadGameState(currentGame, currentPlayer);
+        // Refresh lobby status and leave lobby screen if now active
+        await fetchLobbyStatus(currentGame, currentPlayer || lobby?.player_id);
+        if (lobbyPhase === 'activity') setShowLobbyScreen(false);
+      }
     } catch (e) { console.warn('Failed to start lobby', e); }
   };
 
