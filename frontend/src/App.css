@@ -20,6 +20,14 @@ body {
 }
 
 /* Main Menu Styles */
+/* Lobby additions */
+.lobby-actions { margin-top: 16px; }
+.lobby-actions .or { color: #a0aec0; margin: 8px 0; }
+.lobby-create .join-code { margin-top: 6px; color: #e2e8f0; }
+.create-game-btn.alt { background: #2d3748; border: 1px solid #4a5568; }
+.create-game-btn.alt:hover { background: #384355; }
+
+
 .main-menu {
   min-height: 100vh;
   display: flex;
