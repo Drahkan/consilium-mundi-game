@@ -32,6 +32,17 @@ body {
   min-height: 100vh;
   display: flex;
   align-items: center;
+/* Lobby cosmetic improvements */
+.lobby-panel { margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; }
+.join-code-row { display: flex; align-items: center; gap: 8px; }
+.join-code-row .label { color: #cbd5e0; }
+.code-pill { display: inline-block; padding: 6px 10px; background: #1a202c; border: 1px dashed #4a5568; border-radius: 6px; font-weight: 600; letter-spacing: 1px; cursor: pointer; user-select: all; }
+.copy-btn { padding: 6px 10px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; cursor: pointer; }
+.copy-btn:hover { background: #3b475a; }
+.lobby-meta { margin-top: 8px; display: flex; gap: 12px; color: #a0aec0; }
+.phase-badge { padding: 2px 8px; border-radius: 12px; background: #2d3748; border: 1px solid #4a5568; }
+.phase-badge.active { background: #28533a; border-color: #38a169; color: #e6fffa; }
+
   justify-content: center;
   position: relative;
 }
