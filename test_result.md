@@ -154,9 +154,31 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.1"
-  test_sequence: 2
+  version: "1.2"
+  test_sequence: 3
   run_ui: true
+
+recent_changes:
+  - date: "2025-08-16"
+    summary: "Phase 1 persistence (optional Mongo) + Dev Mode controls + Start Lobby endpoint"
+    backend:
+      - file: "/app/backend/persistence.py"
+        change: "Add GameDAO with save/load/list; UUID-only; no URL hardcoding"
+      - file: "/app/backend/server.py"
+        change: "Hook persistence on mutating routes; lazy-load on state/players; POST /api/lobby/{game_id}/start; POST /api/login"
+    frontend:
+      - file: "/app/frontend/src/App.js"
+        change: "Add devMode toggle (localStorage), Start Lobby button, show Dev/Testing controls when testingMode||devMode"
+      - file: "/app/frontend/src/App.css"
+        change: "Styles for dev toggle and Start Lobby buttons"
+
+verification:
+  - step: "Create game via UI, enable Dev Mode, Start Lobby"
+    result: "Phase shows activity; starfleets at home; player selector visible; Build panel accessible"
+  - step: "Backend curl POST /api/lobby/{game_id}/start"
+    result: "Returns {status: started, phase: activity}"
+  - step: "Persistence check"
+    result: "games count increased in Mongo; after backend restart, GET state by game_id loads successfully (lazy-load)"
 
 test_plan:
   current_focus:
