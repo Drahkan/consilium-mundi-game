@@ -2119,6 +2119,9 @@ function App() {
         {/* Header */}
         <div className="game-header">
           <div className="game-info">
+            <button onClick={toggleDevMode} className="dev-toggle-btn" title="Toggle Dev Mode">
+              {devMode ? 'Disable' : 'Enable'} Dev Mode
+            </button>
             <h2>Consilium Mundi</h2>
             <span className="turn-info">
               Turn {gameState?.turn} - {gameState?.phase}
