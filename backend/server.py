@@ -949,6 +949,111 @@ async def login(payload: Dict[str, Any]):
     token = str(uuid.uuid4())
     return {"token": token, "name": name}
 
+# --- Auth-lite + Lobby (Dev-friendly) ---
+session_tokens: Dict[str, Dict[str, str]] = {}
+join_codes: Dict[str, str] = {}  # code -> game_id
+lobby_ready: Dict[str, Dict[str, bool]] = {}  # game_id -> {player_id: ready}
+
+def _make_join_code() -> str:
+    import string
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+
+@app.post("/api/lobby/create")
+async def lobby_create(payload: Dict[str, Any]):
+    name = (payload or {}).get("name") or "Player"
+    # Create underlying game and host player
+    request = CreateGameRequest(player_name=name, config=GameConfig())
+    create = await create_game(request)
+    game_id = create["game_id"]
+    player_id = create["player_id"]
+    # Create join code
+    code = _make_join_code()
+    join_codes[code] = game_id
+    # Create session token
+    token = str(uuid.uuid4())
+    session_tokens[token] = {"game_id": game_id, "player_id": player_id, "name": name}
+    lobby_ready[game_id] = {player_id: False}
+    return {"game_id": game_id, "player_id": player_id, "token": token, "join_code": code}
+
+@app.post("/api/lobby/join")
+async def lobby_join(payload: Dict[str, Any]):
+    code = (payload or {}).get("join_code")
+    name = (payload or {}).get("name") or "Player"
+    if not code or code not in join_codes:
+        raise HTTPException(status_code=404, detail="Invalid join code")
+    game_id = join_codes[code]
+    # Join game via existing flow
+    jj = await join_game(JoinGameRequest(player_name=name, game_id=game_id))
+    player_id = jj["player_id"]
+    token = str(uuid.uuid4())
+    session_tokens[token] = {"game_id": game_id, "player_id": player_id, "name": name}
+    if game_id not in lobby_ready:
+        lobby_ready[game_id] = {}
+    lobby_ready[game_id][player_id] = False
+    return {"game_id": game_id, "player_id": player_id, "token": token}
+
+@app.get("/api/lobby/{game_id}")
+async def lobby_status(game_id: str):
+    if game_id not in games and _dao:
+        doc = await _dao.load_game(game_id)
+        if doc:
+            eng = GameEngine.from_dict(doc.get("engine", {}))
+            games[game_id] = eng
+            for entry in doc.get("players_index", []):
+                players[entry["id"]] = entry
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    ready_map = lobby_ready.get(game_id, {})
+    return {
+        "game_id": game_id,
+        "players": [
+            {"id": pid, "name": players.get(pid, {}).get("name", "Player"), "ready": ready_map.get(pid, False)}
+            for pid in game.players
+        ],
+        "join_code": next((c for c, gid in join_codes.items() if gid == game_id), None)
+    }
+
+@app.post("/api/lobby/{game_id}/ready")
+async def lobby_ready_set(game_id: str, payload: Dict[str, Any]):
+    token = (payload or {}).get("token")
+    ready = bool((payload or {}).get("ready", True))
+    sess = session_tokens.get(token)
+    if not sess or sess.get("game_id") != game_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    pid = sess["player_id"]
+    if game_id not in lobby_ready:
+        lobby_ready[game_id] = {}
+    lobby_ready[game_id][pid] = ready
+    return {"status": "ok", "player_id": pid, "ready": ready}
+
+@app.post("/api/lobby/{game_id}/start")
+async def start_lobby(game_id: str):
+    # Force start a lobby by creating initial starfleets and setting phase to activity.
+    # Safe to call multiple times; no-op if already started.
+    if game_id not in games and _dao:
+        doc = await _dao.load_game(game_id)
+        if doc:
+            eng = GameEngine.from_dict(doc.get("engine", {}))
+            games[game_id] = eng
+            for entry in doc.get("players_index", []):
+                players[entry["id"]] = entry
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    if game.phase != "activity" and len(game.players) > 0:
+        game.create_initial_starfleets()
+        game.phase = "activity"
+    if _dao:
+        await _dao.save_game(game_id, game.to_dict(), _players_index_for_game(game_id))
+    return {"status": "started", "phase": game.phase}
+
+@app.post("/api/login")
+async def login(payload: Dict[str, Any]):
+    name = (payload or {}).get("name") or "Player"
+    token = str(uuid.uuid4())
+    return {"token": token, "name": name}
+
 @app.get("/")
 async def root():
     return {"message": "Consilium Mundi Game Server", "status": "running"}
