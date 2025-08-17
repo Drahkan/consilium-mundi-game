@@ -57,6 +57,7 @@ class PlayerAction(BaseModel):
 class CreateGameRequest(BaseModel):
     player_name: str
     config: GameConfig
+    seed: Optional[str] = None
 
 class JoinGameRequest(BaseModel):
     player_name: str
