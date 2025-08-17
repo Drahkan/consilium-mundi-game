@@ -2101,6 +2101,37 @@ function App() {
     );
   };
 
+  // Lobby waiting room view
+  if (showLobbyScreen && lobby?.game_id && lobby?.player_id) {
+    return (
+      <div className="App">
+        <div className="main-menu">
+          <div className="menu-background"></div>
+          <div className="menu-content">
+            <h1 className="game-title">Consilium Mundi</h1>
+            <p className="game-subtitle">Lobby Waiting Room</p>
+            <div className="lobby-panel">
+              <div className="join-code-row">
+                <span className="label">Share code:</span>
+                <span className="code-pill" onClick={copyJoinCode} title="Click to copy">{lobby.join_code || '———'}</span>
+                <button onClick={copyJoinCode} className="copy-btn">{copied ? 'Copied!' : 'Copy'}</button>
+              </div>
+              <div className="lobby-meta">
+                <span>Players: {lobbyPlayers.length || 1}</span>
+                <span className={`phase-badge ${lobbyPhase === 'activity' ? 'active' : ''}`}>Phase: {lobbyPhase}</span>
+              </div>
+              <div className="lobby-actions-inline">
+                <button onClick={startLobby} className="start-lobby-btn">Start Lobby</button>
+                <button onClick={() => setShowLobbyScreen(false)} className="create-game-btn alt">Enter Game</button>
+              </div>
+            </div>
+            {error && <div className="error-message">{error}</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentGame) {
     return (
       <div className="App">
