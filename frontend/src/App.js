@@ -2123,6 +2123,22 @@ function App() {
               </button>
 
               <div className="lobby-actions">
+                {lobby?.game_id && (
+                  <div className="lobby-panel">
+                    <div className="join-code-row">
+                      <span className="label">Share code:</span>
+                      <span className="code-pill" onClick={copyJoinCode} title="Click to copy">
+                        {lobby.join_code || '———'}
+                      </span>
+                      <button onClick={copyJoinCode} className="copy-btn">{copied ? 'Copied!' : 'Copy'}</button>
+                    </div>
+                    <div className="lobby-meta">
+                      <span>Players: {lobbyPlayers.length || 1}</span>
+                      <span className={`phase-badge ${lobbyPhase === 'activity' ? 'active' : ''}`}>Phase: {lobbyPhase}</span>
+                    </div>
+                  </div>
+                )}
+
                 <p className="or">— or —</p>
                 <div className="lobby-create">
                   <button onClick={createLobby} className="create-game-btn alt" disabled={loading}>
