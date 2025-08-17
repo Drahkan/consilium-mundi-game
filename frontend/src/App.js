@@ -2109,6 +2109,9 @@ function App() {
           <div className="menu-background"></div>
           <div className="menu-content">
             <h1 className="game-title">Consilium Mundi</h1>
+            {lobby?.join_code && (
+              <div className="lobby-code-banner">Lobby Code: <strong>{lobby.join_code}</strong></div>
+            )}
             <p className="game-subtitle">Lobby Waiting Room</p>
             <div className="lobby-panel">
               <div className="join-code-row">
