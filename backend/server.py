@@ -733,7 +733,10 @@ async def create_game(request: CreateGameRequest):
     player_id = str(uuid.uuid4())
     engine = GameEngine(request.config)
     engine.players.append(player_id)
-    engine.generate_galaxy()
+    # Use lobby join code as seed if present in join_codes for this game
+    seed = None
+    # No seed at creation time unless we wire code; galaxy will be random per game
+    engine.generate_galaxy(seed)
     games[game_id] = engine
     players[player_id] = {"id": player_id, "name": request.player_name, "game_id": game_id}
     # Persist
