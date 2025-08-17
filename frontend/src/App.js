@@ -2130,7 +2130,7 @@ function App() {
             </span>
           </div>
           
-          {/* Dev/Testing controls */}
+          {/* Dev/Testing controls (always allow Dev Mode via localStorage toggle) */}
           {(testingMode || devMode) && (
             <div className="testing-controls">
               <label>Dev/Testing Mode:</label>
