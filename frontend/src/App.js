@@ -2181,7 +2181,9 @@ function App() {
                     {loading ? 'Creating Lobby...' : 'Create Lobby'}
                   </button>
                   {lobby?.join_code && (
-                    <div className="join-code">Share code: <strong>{lobby.join_code}</strong></div>
+                    <div className="join-code">Share code: <strong>{lobby.join_code}</strong>
+                      <span className="code-copy-hint"> (click code to copy)</span>
+                    </div>
                   )}
                 </div>
                 {lobby?.game_id && (
