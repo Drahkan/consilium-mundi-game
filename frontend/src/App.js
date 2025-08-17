@@ -33,6 +33,51 @@ function App() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  // Lobby/Auth-lite UX (minimal) -- Dev-friendly
+  const [lobby, setLobby] = useState(null); // {game_id, player_id, token, join_code}
+  const [joinCode, setJoinCode] = useState('');
+  const [showLobbyScreen, setShowLobbyScreen] = useState(false);
+
+  const createLobby = async () => {
+    if (!playerName.trim()) { setError('Please enter a player name'); return; }
+    setLoading(true); setError(null);
+    try {
+      const resp = await fetch(`${API_BASE}/api/lobby/create`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: playerName })
+      });
+      if (!resp.ok) throw new Error('Failed to create lobby');
+      const data = await resp.json();
+      setLobby(data);
+      setShowLobbyScreen(true);
+      // Reflect game/player in current context
+      setCurrentGame(data.game_id);
+      setCurrentPlayer(data.player_id);
+      await loadGameState(data.game_id, data.player_id);
+      await loadGamePlayers(data.game_id);
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  };
+
+  const joinLobby = async () => {
+    if (!joinCode.trim()) { setError('Enter join code'); return; }
+    const name = playerName.trim() || 'Player';
+    setLoading(true); setError(null);
+    try {
+      const resp = await fetch(`${API_BASE}/api/lobby/join`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ join_code: joinCode, name })
+      });
+      if (!resp.ok) throw new Error('Failed to join lobby');
+      const data = await resp.json();
+      setLobby(prev => ({ ...(prev||{}), ...data }));
+      setShowLobbyScreen(true);
+      setCurrentGame(data.game_id);
+      setCurrentPlayer(data.player_id);
+      await loadGameState(data.game_id, data.player_id);
+      await loadGamePlayers(data.game_id);
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  };
+
   // Create a new game
   const createGame = async () => {
     if (!playerName.trim()) {
