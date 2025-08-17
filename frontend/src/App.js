@@ -2091,6 +2091,12 @@ function App() {
                     <div className="join-code">Share code: <strong>{lobby.join_code}</strong></div>
                   )}
                 </div>
+                {lobby?.game_id && (
+                  <div className="lobby-start">
+                    <button onClick={startLobby} className="start-lobby-btn">Start Lobby</button>
+                  </div>
+                )}
+
                 <div className="lobby-join">
                   <input
                     type="text"
