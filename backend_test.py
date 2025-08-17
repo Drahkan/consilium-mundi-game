@@ -465,6 +465,9 @@ class ConsiliumMundiAPITester:
         # Test sequence
         tests = [
             self.test_root_endpoint,
+            self.test_lobby_create,  # Test lobby creation first
+            self.test_lobby_status,  # Test lobby status
+            self.test_lobby_join,    # Test joining lobby
             self.test_create_game,
             self.test_get_game_state,
             self.test_get_game_players,
