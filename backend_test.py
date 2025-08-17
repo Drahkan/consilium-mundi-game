@@ -321,6 +321,141 @@ class ConsiliumMundiAPITester:
             self.log_test("Login Endpoint", False, f"Exception: {str(e)}")
             return False
 
+    def test_lobby_create(self):
+        """Test lobby creation with join code"""
+        try:
+            payload = {"name": "UI QA"}
+            
+            response = requests.post(
+                f"{self.base_url}/api/lobby/create",
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                
+                # Validate response structure
+                required_fields = ['game_id', 'player_id', 'token', 'join_code']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    success = False
+                    details = f"Missing fields: {missing_fields}"
+                else:
+                    join_code = data.get('join_code', '')
+                    # Store for join test
+                    self.join_code = join_code
+                    self.lobby_game_id = data.get('game_id')
+                    details = f"Join Code: {join_code} (length: {len(join_code)}), Game ID: {data.get('game_id')[:8]}..."
+                    
+                    # Validate join code is 6 characters
+                    if len(join_code) != 6:
+                        success = False
+                        details += f" - ERROR: Join code should be 6 characters, got {len(join_code)}"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+                
+            self.log_test("Lobby Create", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Lobby Create", False, f"Exception: {str(e)}")
+            return False
+
+    def test_lobby_join(self):
+        """Test joining lobby with join code"""
+        if not hasattr(self, 'join_code') or not self.join_code:
+            self.log_test("Lobby Join", False, "No join_code available from lobby create")
+            return False
+            
+        try:
+            payload = {"join_code": self.join_code, "name": "Join QA"}
+            
+            response = requests.post(
+                f"{self.base_url}/api/lobby/join",
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                
+                # Validate response structure
+                required_fields = ['game_id', 'player_id', 'token']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    success = False
+                    details = f"Missing fields: {missing_fields}"
+                else:
+                    details = f"Joined Game ID: {data.get('game_id')[:8]}..., Player ID: {data.get('player_id')[:8]}..."
+                    
+                    # Verify same game_id as lobby create
+                    if hasattr(self, 'lobby_game_id') and data.get('game_id') == self.lobby_game_id:
+                        details += " - Same game as lobby create ✓"
+                    else:
+                        details += " - Different game than lobby create ⚠️"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+                
+            self.log_test("Lobby Join", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Lobby Join", False, f"Exception: {str(e)}")
+            return False
+
+    def test_lobby_status(self):
+        """Test lobby status endpoint"""
+        if not hasattr(self, 'lobby_game_id') or not self.lobby_game_id:
+            self.log_test("Lobby Status", False, "No lobby_game_id available")
+            return False
+            
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/lobby/{self.lobby_game_id}",
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                
+                # Validate response structure
+                required_fields = ['game_id', 'players', 'join_code']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    success = False
+                    details = f"Missing fields: {missing_fields}"
+                else:
+                    players = data.get('players', [])
+                    join_code = data.get('join_code', '')
+                    details = f"Players: {len(players)}, Join Code: {join_code}"
+                    
+                    # Check if join code matches
+                    if hasattr(self, 'join_code') and join_code == self.join_code:
+                        details += " - Join code matches ✓"
+                    else:
+                        details += " - Join code mismatch ⚠️"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+                
+            self.log_test("Lobby Status", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Lobby Status", False, f"Exception: {str(e)}")
+            return False
+
     def run_all_tests(self):
         """Run all backend tests in sequence"""
         print("🚀 Starting Consilium Mundi Backend API Tests")
