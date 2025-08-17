@@ -188,8 +188,13 @@ class GameEngine:
         engine.combat_reports = list(d.get("combat_reports", []))
         return engine
 
-    def generate_galaxy(self):
-        # ... existing implementation remains (omitted here for brevity)
+    def generate_galaxy(self, seed: Optional[str] = None):
+        # Allow deterministic generation if a seed is provided; otherwise random per game
+        if seed:
+            try:
+                random.seed(seed)
+            except Exception:
+                pass
         num_players = self.config.num_players
         systems_per_player = 8
         total_systems = num_players * systems_per_player + 1
