@@ -2080,6 +2080,30 @@ function App() {
               >
                 {loading ? 'Creating Galaxy...' : 'Create New Game'}
               </button>
+
+              <div className="lobby-actions">
+                <p className="or">— or —</p>
+                <div className="lobby-create">
+                  <button onClick={createLobby} className="create-game-btn alt" disabled={loading}>
+                    {loading ? 'Creating Lobby...' : 'Create Lobby'}
+                  </button>
+                  {lobby?.join_code && (
+                    <div className="join-code">Share code: <strong>{lobby.join_code}</strong></div>
+                  )}
+                </div>
+                <div className="lobby-join">
+                  <input
+                    type="text"
+                    placeholder="Join code"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    className="player-name-input"
+                  />
+                  <button onClick={joinLobby} className="create-game-btn alt" disabled={loading}>
+                    Join Lobby
+                  </button>
+                </div>
+              </div>
             </div>
             
             {error && <div className="error-message">{error}</div>}
