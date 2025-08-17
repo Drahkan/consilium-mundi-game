@@ -7,6 +7,9 @@ import sys
 sys.path.append("/app/backend")
 import server as srv  # type: ignore
 
+# Disable persistence for unit tests using TestClient to avoid event loop issues with Motor
+srv._dao = None
+
 client = TestClient(srv.app)
 
 @pytest.fixture
