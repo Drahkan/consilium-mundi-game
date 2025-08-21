@@ -931,7 +931,7 @@ function App() {
       return;
     }
     
-    const movementCount = Object.keys(starfleetOrders).length;
+    const movementCount = Object.keys(getCurrentPlayerMovementOrders()).length;
     const currentBuildOrders = getCurrentPlayerBuildOrders();
     const buildCount = Object.keys(currentBuildOrders).length;
     
