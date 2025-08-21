@@ -333,7 +333,7 @@ function App() {
     if (!currentGame || !currentPlayer) return;
 
     try {
-      const orders = Object.values(starfleetOrders);
+      const orders = Object.values(getCurrentPlayerMovementOrders());
       
       const response = await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
         method: 'POST',
@@ -346,7 +346,7 @@ function App() {
 
       if (!response.ok) throw new Error('Failed to submit orders');
 
-      setStarfleetOrders({});
+      setCurrentPlayerMovementOrders({});
       alert('Orders submitted successfully!');
       
     } catch (err) {
