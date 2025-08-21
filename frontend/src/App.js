@@ -1728,9 +1728,9 @@ function App() {
                   {starfleet.orders && (
                     <p><strong>Orders:</strong> {starfleet.orders.type}</p>
                   )}
-                  {starfleetOrders[starfleet.id] && (
+                  {getCurrentPlayerMovementOrders()[starfleet.id] && (
                     <p className="pending-order">
-                      <strong>Pending:</strong> {starfleetOrders[starfleet.id].order_type}
+                      <strong>Pending:</strong> {getCurrentPlayerMovementOrders()[starfleet.id].order_type}
                     </p>
                   )}
                 </div>
