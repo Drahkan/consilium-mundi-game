@@ -2306,7 +2306,7 @@ function App() {
             {renderOrdersPanel()}
             {renderOrderSummary()}
             
-            {(Object.keys(starfleetOrders).length > 0 || Object.keys(getCurrentPlayerBuildOrders()).length > 0) && (
+            {(Object.keys(getCurrentPlayerMovementOrders()).length > 0 || Object.keys(getCurrentPlayerBuildOrders()).length > 0) && (
               <div className="global-submit-section">
                 <div className="order-actions">
                   <button 
