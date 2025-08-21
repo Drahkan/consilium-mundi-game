@@ -14,7 +14,12 @@ function App() {
   const [selectedSystem, setSelectedSystem] = useState(null);
   const [testingMode, setTestingMode] = useState(false);
   const [selectedStarfleet, setSelectedStarfleet] = useState(null);
-  const [starfleetOrders, setStarfleetOrders] = useState({});
+  // Movement orders per player { [playerId]: { [fleetId]: order } }
+  const [playerStarfleetOrders, setPlayerStarfleetOrders] = useState({});
+  const getCurrentPlayerMovementOrders = () => playerStarfleetOrders[currentPlayer] || {};
+  const setCurrentPlayerMovementOrders = (orders) => {
+    setPlayerStarfleetOrders(prev => ({ ...prev, [currentPlayer]: orders }));
+  };
   const [buildOrders, setBuildOrders] = useState({});
   const [playerBuildOrders, setPlayerBuildOrders] = useState({}); // Per-player build orders
   const [showBuildPanel, setShowBuildPanel] = useState(false);
