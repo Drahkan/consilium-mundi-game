@@ -2291,6 +2291,7 @@ function App() {
             <button onClick={toggleDevMode} className="dev-toggle-btn" title="Toggle Dev Mode">
               {devMode ? 'Disable' : 'Enable'} Dev Mode
             </button>
+            {renderResourceWidget()}
             <span className="turn-info">
               Turn {gameState?.turn} - {gameState?.phase}
               {gameState?.player_resources && (
