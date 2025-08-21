@@ -1317,7 +1317,7 @@ function App() {
     }
     
     // Clear all pending orders after auto-submission
-    setStarfleetOrders({});
+    setPlayerStarfleetOrders({});
     setPlayerBuildOrders({});
     setBuildOrders({});
   };
