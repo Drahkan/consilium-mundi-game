@@ -1571,6 +1571,62 @@ function App() {
   }, [currentPlayer, playerBuildOrders]);
 
   // Render galaxy map
+  // Compute a concise resource summary always visible in header
+  const getResourceSummary = () => {
+    if (!gameState || !currentPlayer || !gameState.player_resources) return null;
+    const current = { ...gameState.player_resources };
+    // Pending spend from current player's pending builds
+    const currentBuildOrders = getCurrentPlayerBuildOrders();
+    const pendingSpend = Object.values(currentBuildOrders).reduce((acc, order) => {
+      const c = getBuildCost(order.build_type);
+      acc.tech += c.tech; acc.metals += c.metals; acc.chon += c.chon; return acc;
+    }, { tech: 0, metals: 0, chon: 0 });
+    const available = {
+      tech: current.tech - pendingSpend.tech,
+      metals: current.metals - pendingSpend.metals,
+      chon: current.chon - pendingSpend.chon,
+    };
+    const impact = calculateResourceImpact();
+    const income = impact ? impact.income : { tech: 0, metals: 0, chon: 0 };
+    const upkeep = impact ? impact.upkeep : { tech: 0, metals: 0, chon: 0 };
+    const postTurn = impact ? impact.resourcesAfterTurn : available;
+    return { current, pendingSpend, available, income, upkeep, postTurn };
+  };
+
+  const renderResourceWidget = () => {
+    const s = getResourceSummary();
+    if (!s) return null;
+    const val = (n) => (n >= 0 ? n : n); // show negatives if overspending
+    return (
+      <div className="resource-widget">
+        <div className="row">
+          <span className="label">Current</span>
+          <span>T:{s.current.tech} M:{s.current.metals} C:{s.current.chon}</span>
+        </div>
+        <div className="row dim">
+          <span className="label">Pending</span>
+          <span>-T:{s.pendingSpend.tech} -M:{s.pendingSpend.metals} -C:{s.pendingSpend.chon}</span>
+        </div>
+        <div className="row">
+          <span className="label">Available</span>
+          <span>T:{val(s.available.tech)} M:{val(s.available.metals)} C:{val(s.available.chon)}</span>
+        </div>
+        <div className="row dim">
+          <span className="label">Income</span>
+          <span>+T:{s.income.tech} +M:{s.income.metals} +C:{s.income.chon}</span>
+        </div>
+        <div className="row dim">
+          <span className="label">Upkeep</span>
+          <span>-T:{s.upkeep.tech} -M:{s.upkeep.metals} -C:{s.upkeep.chon}</span>
+        </div>
+        <div className="row strong">
+          <span className="label">Post-Turn</span>
+          <span>T:{s.postTurn.tech} M:{s.postTurn.metals} C:{s.postTurn.chon}</span>
+        </div>
+      </div>
+    );
+  };
+
   const renderGalaxyMap = () => {
     if (!gameState || !gameState.systems) return null;
 
