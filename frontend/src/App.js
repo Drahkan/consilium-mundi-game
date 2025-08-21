@@ -1287,8 +1287,8 @@ function App() {
       
       try {
         // Submit starfleet orders if any
-        if (Object.keys(playerStarfleetOrders).length > 0) {
-          const orders = Object.values(playerStarfleetOrders);
+        if (Object.keys(playerMovementOrders).length > 0) {
+          const orders = Object.values(playerMovementOrders);
           await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
