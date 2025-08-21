@@ -58,6 +58,13 @@ body {
   bottom: 0;
   background-image: url('https://images.unsplash.com/photo-1538370965046-79c0d6907d47?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMGdhbGF4eXxlbnwwfHx8Ymx1ZXwxNzUzOTIxOTg3fDA&ixlib=rb-4.1.0&q=85');
   background-size: cover;
+/* Resource widget (header) */
+.resource-widget { display:inline-flex; flex-direction: column; gap: 2px; margin-right: 12px; padding: 6px 8px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; }
+.resource-widget .row { display:flex; gap: 10px; color: #e2e8f0; font-size: 12px; align-items: center; }
+.resource-widget .row .label { color: #a0aec0; width: 76px; }
+.resource-widget .row.dim { color: #cbd5e0; opacity: 0.85; }
+.resource-widget .row.strong { color: #f6e05e; }
+
   background-position: center;
   opacity: 0.3;
   z-index: 0;
