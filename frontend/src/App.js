@@ -2313,7 +2313,7 @@ function App() {
                     onClick={() => setShowOrderSummary(true)}
                     className="order-summary-btn"
                   >
-                    Review Orders ({Object.keys(starfleetOrders).length + Object.keys(getCurrentPlayerBuildOrders()).length})
+                    Review Orders ({Object.keys(getCurrentPlayerMovementOrders()).length + Object.keys(getCurrentPlayerBuildOrders()).length})
                   </button>
                   <button onClick={submitAllOrders} className="submit-all-orders-btn">
                     Finalize Orders
