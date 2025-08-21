@@ -973,7 +973,7 @@ function App() {
       const currentBuildOrders = getCurrentPlayerBuildOrders();
       
       // Submit starfleet orders first
-      if (Object.keys(starfleetOrders).length > 0) {
+      if (Object.keys(getCurrentPlayerMovementOrders()).length > 0) {
         console.log('Submitting starfleet orders...');
         await submitOrders();
       }
