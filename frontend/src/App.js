@@ -1280,7 +1280,7 @@ function App() {
       const playerId = player.id;
       
       // Check if this player has pending starfleet orders
-      const playerStarfleetOrders = Object.keys(starfleetOrders).length > 0 && currentPlayer === playerId ? starfleetOrders : {};
+      const playerMovementOrders = playerStarfleetOrders[playerId] || {};
       
       // Check if this player has pending build orders
       const currentPlayerBuildOrders = playerBuildOrders[playerId] || {};
