@@ -304,7 +304,7 @@ function App() {
   const issueStarfleetOrder = (orderType, targetSystem = null, supportTarget = null) => {
     if (!selectedStarfleet) return;
 
-    const newOrders = { ...starfleetOrders };
+    const newOrders = { ...getCurrentPlayerMovementOrders() };
     
     // Create the order
     const order = {
@@ -325,7 +325,7 @@ function App() {
       newOrders[orderKey] = order;
     }
 
-    setStarfleetOrders(newOrders);
+    setCurrentPlayerMovementOrders(newOrders);
   };
 
   // Submit starfleet orders
