@@ -537,7 +537,7 @@ function App() {
   const renderOrderSummary = () => {
     if (!showOrderSummary || !gameState) return null;
     
-    const movementOrders = Object.values(starfleetOrders);
+    const movementOrders = Object.values(getCurrentPlayerMovementOrders());
     const currentBuildOrders = getCurrentPlayerBuildOrders();
     const pendingBuildOrders = Object.values(currentBuildOrders);
     const availableResources = calculateAvailableResources();
