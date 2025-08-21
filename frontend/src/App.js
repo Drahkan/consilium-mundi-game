@@ -2030,7 +2030,7 @@ function App() {
     if (!starfleet || starfleet.owner !== currentPlayer) return null;
     
     // Get current order for this starfleet
-    const currentOrder = starfleetOrders[selectedStarfleet];
+    const currentOrder = getCurrentPlayerMovementOrders()[selectedStarfleet];
     const currentOrderType = currentOrder?.order_type || 'defend';
     
     const system = gameState.systems[selectedSystem];
