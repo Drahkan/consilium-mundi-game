@@ -578,6 +578,11 @@ body {
   font-size: 0.8rem;
   margin-top: 0.25rem;
 }
+.orders-panel { position: relative; }
+.orders-header { display: flex; align-items: center; justify-content: space-between; }
+.orders-close { background: transparent; color: #e2e8f0; border: none; font-size: 18px; cursor: pointer; }
+.orders-close:hover { color: #fff; }
+
 
 .build-requirement {
   color: #d69e2e;
