@@ -2333,14 +2333,12 @@ function App() {
                 </button>
               )}
               
-              {gameState?.combat_reports && gameState.combat_reports.length > 0 && (
-                <button 
-                  onClick={() => setShowCombatReports(!showCombatReports)} 
-                  className="combat-reports-btn"
-                >
-                  Combat Reports ({gameState.combat_reports.length})
-                </button>
-              )}
+              <button 
+                onClick={() => setShowCombatReports(!showCombatReports)} 
+                className="combat-reports-btn"
+              >
+                Combat Reports ({(gameState?.combat_reports || []).filter(r => (r.attackers && Object.keys(r.attackers).includes(currentPlayer)) || (gameState.systems[r.system]?.owner === currentPlayer)).length})
+              </button>
               
               <button onClick={toggleDevMode} className="dev-toggle-btn" title="Toggle Dev Mode">{devMode ? 'Disable' : 'Enable'} Dev Mode</button>
               <button onClick={startLobby} className="start-lobby-btn" title="Force start lobby (dev)">Start Lobby</button>
