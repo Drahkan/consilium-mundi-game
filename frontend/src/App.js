@@ -992,6 +992,8 @@ function App() {
       // Clear current player's build orders after successful submission
       updateCurrentPlayerBuildOrders({});
       
+      // Mark current player ready after successful submission
+      setPlayerReady(prev => ({ ...prev, [currentPlayer]: true }));
       alert(`Turn finalized for ${getPlayerName(currentPlayer)}!`);
       
       // Refresh game state
