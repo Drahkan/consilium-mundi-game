@@ -2375,9 +2375,15 @@ function App() {
                   >
                     Review Orders ({Object.keys(getCurrentPlayerMovementOrders()).length + Object.keys(getCurrentPlayerBuildOrders()).length})
                   </button>
-                  <button onClick={submitAllOrders} className="submit-all-orders-btn">
-                    Finalize Orders
-                  </button>
+                  {!isCurrentPlayerReady ? (
+                    <button onClick={submitAllOrders} className="submit-all-orders-btn">
+                      Finalize Orders
+                    </button>
+                  ) : (
+                    <button onClick={() => setPlayerReady(prev => ({ ...prev, [currentPlayer]: false }))} className="submit-all-orders-btn ready">
+                      Unready
+                    </button>
+                  )}
                 </div>
               </div>
             )}
