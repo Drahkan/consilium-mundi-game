@@ -646,6 +646,9 @@ body {
   font-size: 1.1rem;
 }
 
+.submit-all-orders-btn.ready { background: #2d3748; border-color: #38a169; color: #c6f6d5; }
+.submit-all-orders-btn.ready:hover { background: #384355; }
+
 .submit-all-orders-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(214, 158, 46, 0.6);
