@@ -2100,7 +2100,10 @@ function App() {
 
     return (
       <div className="orders-panel">
-        <h4>Starfleet Orders</h4>
+        <div className="orders-header">
+          <h4>Starfleet Orders</h4>
+          <button className="orders-close" onClick={closePanel} title="Close">×</button>
+        </div>
         <p>Starfleet in: {system.name}</p>
         
         <div className="order-buttons">
