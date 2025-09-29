@@ -27,6 +27,8 @@ function App() {
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const combatPanelRef = React.useRef(null);
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
+  const [playerReady, setPlayerReady] = useState({}); // { [playerId]: boolean }
+  const isCurrentPlayerReady = !!playerReady[currentPlayer];
   const [showOrderSummary, setShowOrderSummary] = useState(false);
   const [showResourceWarning, setShowResourceWarning] = useState(false);
   const [warningDetails, setWarningDetails] = useState(null);
