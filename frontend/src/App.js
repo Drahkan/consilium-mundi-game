@@ -1842,7 +1842,7 @@ function App() {
     
     if (playerReports.length === 0) {
       return (
-        <div className="combat-reports-panel">
+        <div className="combat-reports-panel" ref={combatPanelRef}>
           <h4>Combat Reports</h4>
           <p className="text-gray-400 text-sm">No combat reports for this player.</p>
         </div>
