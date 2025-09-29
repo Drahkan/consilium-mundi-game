@@ -1890,7 +1890,7 @@ function App() {
     };
     
     return (
-      <div className="combat-reports-panel">
+      <div className="combat-reports-panel" ref={combatPanelRef}>
         <h4>Combat Reports</h4>
         {Object.entries(reportsByTurn)
           .sort(([a], [b]) => Number(b) - Number(a)) // Newest first
