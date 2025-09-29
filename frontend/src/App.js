@@ -1811,6 +1811,13 @@ function App() {
             </div>
           )}
         </div>
+    // Ensure panel scroll starts at top when opening
+    React.useEffect(() => {
+      if (showCombatReports && combatPanelRef.current) {
+        combatPanelRef.current.scrollTop = 0;
+      }
+    }, [showCombatReports, currentPlayer]);
+
       </div>
     );
   };
