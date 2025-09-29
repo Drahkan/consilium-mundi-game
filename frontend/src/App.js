@@ -2083,6 +2083,7 @@ function App() {
   };
   const renderOrdersPanel = () => {
     if (!selectedStarfleet || !gameState || !selectedSystem) return null;
+    const closePanel = () => setSelectedStarfleet(null);
     
     const starfleet = gameState.systems[selectedSystem]?.starfleet_details?.find(
       sf => sf.id === selectedStarfleet
