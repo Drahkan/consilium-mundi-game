@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><body>
+<h1>Project Tree</h1>
+<div id="tree"></div>
+<script>
+async function fetchTree(path = '') {
+  const apiUrl = `https://api.github.com/repos/Drahkan/conflict_241125_1754/contents/${path}?ref=main`; // Replace with your repo/branch
+  const res = await fetch(apiUrl);
+  const items = await res.json();
+  const ul = document.createElement('ul');
+  items.forEach(item => {
+    const li = document.createElement('li');
+    if (item.type === 'dir') {
+      const a = document.createElement('a');
+      a.href = item.path + '/'; // Recursive folder link
+      a.textContent = item.name + '/';
+      a.onclick = () => fetchTree(item.path); // Load sub-tree dynamically
+      li.appendChild(a);
+    } else {
+      const a = document.createElement('a');
+      a.href = `https://raw.githubusercontent.com/Drahkan/conflict_241125_1754/main/${item.path}`; // Raw file view
+      a.textContent = item.name;
+      a.target = '_blank';
+      li.appendChild(a);
+    }
+    ul.appendChild(li);
+  });
+  document.getElementById('tree').innerHTML = '';
+  document.getElementById('tree').appendChild(ul);
+}
+fetchTree(); // Load root on page load
+</script>
+</body></html>
