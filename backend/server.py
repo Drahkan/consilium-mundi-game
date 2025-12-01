@@ -8,7 +8,7 @@ import random
 import math
 from datetime import datetime, timezone
 import json
-from pathlib
+from pathlib import Path
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from persistence import GameDAO
