@@ -31,7 +31,7 @@ app.add_middleware(
 MONGO_URL = os.environ.get("MONGO_URL")
 _mongo_client = AsyncIOMotorClient(MONGO_URL) if MONGO_URL else None
 _db = _mongo_client["consilium_mundi"] if _mongo_client else None
-_dao = GameDAO(_db) if _db else None
+_dao = GameDAO(_db) if _db is not None else None
 
 # In-memory state
 games: Dict[str, Any] = {}
