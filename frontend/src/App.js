@@ -73,7 +73,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('API POST error:', e);
