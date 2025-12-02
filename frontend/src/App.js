@@ -106,7 +106,7 @@ function App() {
     }
   };
 
-  const loadGamePlayers = async (gameId => {
+  const loadGamePlayers = async (gameId) => {
     const data = await apiGet(`/api/game/${gameId}/players`);
     if (data) setAvailablePlayers(data.players || []);
   };
