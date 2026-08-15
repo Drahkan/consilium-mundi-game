@@ -1091,6 +1091,49 @@ async def add_ai_players(game_id: str):
         "status": "success"
     }
 
+@app.post("/api/game/{game_id}/start")
+async def start_game(game_id: str, payload: Optional[Dict[str, Any]] = None):
+    """Force-start a game. Optionally fill remaining slots with AI players.
+
+    Body (optional): {"fill_with_ai": bool = true}
+    """
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    game = games[game_id]
+    fill_with_ai = True
+    if payload and "fill_with_ai" in payload:
+        fill_with_ai = bool(payload["fill_with_ai"])
+
+    if game.phase == "activity":
+        return {"status": "already_started", "game_id": game_id, "phase": game.phase}
+
+    if len(game.players) < 2 and not fill_with_ai:
+        raise HTTPException(status_code=400, detail="Need at least 2 players to start (or enable fill_with_ai)")
+
+    if fill_with_ai:
+        ai_names = ["Admiral Zara", "Commander Vex", "Captain Nova", "Warlord Kane", "Ambassador Ryn"]
+        idx = 0
+        while len(game.players) < game.config.num_players and idx < len(ai_names):
+            player_id = str(uuid.uuid4())
+            game.players.append(player_id)
+            players[player_id] = {
+                "id": player_id,
+                "name": ai_names[idx],
+                "game_id": game_id,
+            }
+            idx += 1
+
+    game.create_initial_starfleets()
+    game.phase = "activity"
+
+    return {
+        "status": "started",
+        "game_id": game_id,
+        "phase": game.phase,
+        "player_count": len(game.players),
+    }
+
 @app.get("/api/game/{game_id}/state")
 async def get_game_state(game_id: str, player_id: Optional[str] = None):
     """Get current game state"""

@@ -1,7 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+
+// Read ?game=<id> and ?name=<n> from URL for shareable joins
+function readUrlParams() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return { game: p.get('game') || '', name: p.get('name') || '' };
+  } catch (e) { return { game: '', name: '' }; }
+}
 
 function App() {
   const [gameState, setGameState] = useState(null);
@@ -25,6 +33,13 @@ function App() {
   const [showResourceWarning, setShowResourceWarning] = useState(false);
   const [warningDetails, setWarningDetails] = useState(null);
   const [showResourceImpact, setShowResourceImpact] = useState(false);
+
+  // Multi-player lobby state
+  const [landingMode, setLandingMode] = useState('create'); // 'create' | 'join'
+  const [joinGameId, setJoinGameId] = useState('');
+  const [numPlayersConfig, setNumPlayersConfig] = useState(2);
+  const [copiedFlag, setCopiedFlag] = useState(false);
+  const lobbyPollRef = useRef(null);
   
   // Map navigation state
   const [mapZoom, setMapZoom] = useState(1);
@@ -32,6 +47,37 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Auto-fill join form from URL params on first mount
+  useEffect(() => {
+    const { game, name } = readUrlParams();
+    if (game) {
+      setJoinGameId(game);
+      setLandingMode('join');
+    }
+    if (name) setPlayerName(name);
+  }, []);
+
+  // Poll game state:
+  //   - Every 2s while in the lobby (phase !== 'activity') so joins appear quickly
+  //   - Every 5s during active play so the other player's turn resolutions show
+  useEffect(() => {
+    if (!currentGame) return undefined;
+    const phase = gameState?.phase;
+    const interval = phase === 'activity' ? 5000 : 2000;
+
+    if (lobbyPollRef.current) clearInterval(lobbyPollRef.current);
+    lobbyPollRef.current = setInterval(() => {
+      loadGameState(currentGame, currentPlayer);
+      loadGamePlayers(currentGame);
+    }, interval);
+    return () => {
+      if (lobbyPollRef.current) {
+        clearInterval(lobbyPollRef.current);
+        lobbyPollRef.current = null;
+      }
+    };
+  }, [currentGame, currentPlayer, gameState?.phase]);
 
   // Create a new game
   const createGame = async () => {
@@ -50,7 +96,7 @@ function App() {
         body: JSON.stringify({
           player_name: playerName,
           config: {
-            num_players: 4,
+            num_players: numPlayersConfig,
             galaxy_size: "standard",
             turn_time_limit: 24
           }
@@ -62,30 +108,65 @@ function App() {
       const data = await response.json();
       setCurrentGame(data.game_id);
       setCurrentPlayer(data.player_id);
-      setTestingMode(true);
-      
+      // Testing mode stays OFF for real multi-player games; enable via header toggle if needed
+      setTestingMode(false);
+
       // Load initial game state WITH player_id to get resources
       await loadGameState(data.game_id, data.player_id);
       await loadGamePlayers(data.game_id);
-      
-      // Automatically add AI players for testing
-      setTimeout(async () => {
-        try {
-          const aiResponse = await fetch(`${API_BASE}/api/game/${data.game_id}/add-ai-players`, {
-            method: 'POST',
-          });
-          
-          if (aiResponse.ok) {
-            // Refresh game state to show AI players AND ensure resources are loaded
-            await loadGameState(data.game_id, data.player_id);
-            await loadGamePlayers(data.game_id);
-            console.log('AI players added automatically');
-          }
-        } catch (err) {
-          console.warn('Failed to add AI players:', err);
-        }
-      }, 1000);
-      
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Join an existing game via shared code
+  const joinGame = async () => {
+    if (!playerName.trim()) { setError('Please enter a player name'); return; }
+    if (!joinGameId.trim()) { setError('Please enter a game code'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/join-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_name: playerName, game_id: joinGameId.trim() })
+      });
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.detail || 'Failed to join game');
+      }
+      const data = await response.json();
+      setCurrentGame(data.game_id);
+      setCurrentPlayer(data.player_id);
+      setTestingMode(false);
+      await loadGameState(data.game_id, data.player_id);
+      await loadGamePlayers(data.game_id);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Force-start current game (host action in lobby); fills empty slots with AI
+  const startGame = async (fillWithAi = true) => {
+    if (!currentGame) return;
+    setLoading(true);
+    try {
+      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fill_with_ai: fillWithAi })
+      });
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.detail || 'Failed to start game');
+      }
+      await loadGameState(currentGame, currentPlayer);
+      await loadGamePlayers(currentGame);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1716,15 +1797,9 @@ function App() {
       return false;
     });
     
-    if (playerReports.length === 0) {
-      return (
-        <div className="combat-reports-panel">
-          <h4>Combat Reports</h4>
-          <p className="text-gray-400 text-sm">No combat reports for this player.</p>
-        </div>
-      );
-    }
-    
+    // Always render the turn timeline (placeholders are shown for empty turns
+    // below) — this lets the panel feel alive even before any battles happen.
+
     // Group reports by turn
     const reportsByTurn = {};
     playerReports.forEach((report, index) => {
@@ -1734,10 +1809,14 @@ function App() {
       }
       reportsByTurn[turn].push({ ...report, index });
     });
-    
-    // Auto-expand current turn, collapse seen turns
+
+    // Backfill empty turns: show a "No combat this turn" row for every past
+    // turn the player has lived through but had no engagements in.
     const currentTurn = gameState.turn;
-    
+    for (let t = 1; t <= currentTurn; t++) {
+      if (!reportsByTurn[t]) reportsByTurn[t] = [];
+    }
+
     const toggleTurnExpansion = (turn) => {
       setCombatReportsExpanded(prev => ({
         ...prev,
@@ -1789,6 +1868,11 @@ function App() {
                 
                 {isExpanded && (
                   <div className="turn-reports mt-2">
+                    {reports.length === 0 && (
+                      <div className="combat-report mb-2 p-3 bg-gray-900 rounded text-sm text-gray-500 italic">
+                        No combat this turn.
+                      </div>
+                    )}
                     {reports.map(report => (
                       <div key={report.index} className="combat-report mb-4 p-3 bg-gray-900 rounded">
                         <div className="report-header">
@@ -2073,15 +2157,130 @@ function App() {
     );
   };
 
+  const shareUrl = () => {
+    try {
+      return `${window.location.origin}${window.location.pathname}?game=${currentGame}`;
+    } catch (e) { return currentGame || ''; }
+  };
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl());
+      setCopiedFlag(true);
+      setTimeout(() => setCopiedFlag(false), 1500);
+    } catch (e) { setError('Could not copy — link is: ' + shareUrl()); }
+  };
+
+  const copyGameCode = async () => {
+    try {
+      await navigator.clipboard.writeText(currentGame);
+      setCopiedFlag(true);
+      setTimeout(() => setCopiedFlag(false), 1500);
+    } catch (e) { setError('Could not copy — code is: ' + currentGame); }
+  };
+
+  const renderLobby = () => {
+    const capacity = gameState?.config?.num_players || 2;
+    const joined = availablePlayers.length;
+    const isHost = availablePlayers.length > 0 && availablePlayers[0].id === currentPlayer;
+    const link = shareUrl();
+    return (
+      <div className="App">
+        <div className="main-menu">
+          <div className="menu-background"></div>
+          <div className="menu-content" style={{ minWidth: 480 }}>
+            <h1 className="game-title">Consilium Mundi</h1>
+            <p className="game-subtitle">Lobby — waiting for players</p>
+
+            <div style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '1rem', margin: '1rem 0', textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Game Code</div>
+                  <div style={{ fontFamily: 'monospace', color: '#f8fafc', fontSize: 14, wordBreak: 'break-all' }} data-testid="lobby-game-code">{currentGame}</div>
+                </div>
+                <button onClick={copyGameCode} className="create-game-btn" style={{ padding: '0.5rem 0.75rem', width: 'auto' }} data-testid="lobby-copy-code">
+                  {copiedFlag ? 'Copied ✓' : 'Copy Code'}
+                </button>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Share Link</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input readOnly value={link} className="player-name-input" style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }} data-testid="lobby-share-link" />
+                  <button onClick={copyShareLink} className="create-game-btn" style={{ padding: '0.5rem 0.75rem', width: 'auto' }} data-testid="lobby-copy-link">Copy</button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'left', margin: '0.5rem 0 1rem 0' }}>
+              <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Players ({joined} / {capacity})</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }} data-testid="lobby-player-list">
+                {availablePlayers.map(p => (
+                  <li key={p.id} style={{ padding: '6px 10px', margin: '4px 0', background: 'rgba(255,255,255,0.04)', borderRadius: 8, color: getPlayerColor(p.id) }}>
+                    {p.name}{p.id === currentPlayer ? ' (you)' : ''}
+                  </li>
+                ))}
+                {Array.from({ length: Math.max(0, capacity - joined) }).map((_, i) => (
+                  <li key={`empty-${i}`} style={{ padding: '6px 10px', margin: '4px 0', background: 'rgba(255,255,255,0.02)', borderRadius: 8, color: '#64748b', fontStyle: 'italic' }}>
+                    Empty slot
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {isHost ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => startGame(true)}
+                  disabled={loading}
+                  className="create-game-btn"
+                  style={{ flex: 1 }}
+                  data-testid="lobby-start-with-ai"
+                >
+                  {loading ? 'Starting…' : (joined < capacity ? 'Start Now (fill with AI)' : 'Start Game')}
+                </button>
+              </div>
+            ) : (
+              <div style={{ color: '#94a3b8', fontStyle: 'italic', padding: '0.5rem 0' }}>
+                Waiting for host to start…
+              </div>
+            )}
+
+            {error && <div className="error-message">{error}</div>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (!currentGame) {
     return (
       <div className="App">
         <div className="main-menu">
           <div className="menu-background"></div>
-          <div className="menu-content">
+          <div className="menu-content" style={{ minWidth: 460 }}>
             <h1 className="game-title">Consilium Mundi</h1>
             <p className="game-subtitle">A Game of Interstellar Commerce, Diplomacy and Warfare</p>
-            
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 8, margin: '1.25rem 0 1rem 0' }}>
+              <button
+                onClick={() => setLandingMode('create')}
+                className="create-game-btn"
+                style={{ flex: 1, background: landingMode === 'create' ? undefined : 'rgba(255,255,255,0.06)', color: landingMode === 'create' ? undefined : '#cbd5e1' }}
+                data-testid="landing-tab-create"
+              >
+                Create Game
+              </button>
+              <button
+                onClick={() => setLandingMode('join')}
+                className="create-game-btn"
+                style={{ flex: 1, background: landingMode === 'join' ? undefined : 'rgba(255,255,255,0.06)', color: landingMode === 'join' ? undefined : '#cbd5e1' }}
+                data-testid="landing-tab-join"
+              >
+                Join Game
+              </button>
+            </div>
+
             <div className="create-game-form">
               <input
                 type="text"
@@ -2089,22 +2288,66 @@ function App() {
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 className="player-name-input"
+                data-testid="landing-player-name"
               />
-              
-              <button 
-                onClick={createGame}
-                disabled={loading}
-                className="create-game-btn"
-              >
-                {loading ? 'Creating Galaxy...' : 'Create New Game'}
-              </button>
+
+              {landingMode === 'create' ? (
+                <>
+                  <label style={{ display: 'block', textAlign: 'left', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0.5rem 0 0.25rem 2px' }}>
+                    Players in this game
+                  </label>
+                  <select
+                    value={numPlayersConfig}
+                    onChange={(e) => setNumPlayersConfig(parseInt(e.target.value, 10))}
+                    className="player-name-input"
+                    data-testid="landing-num-players"
+                  >
+                    <option value={2}>2 players</option>
+                    <option value={3}>3 players</option>
+                    <option value={4}>4 players</option>
+                  </select>
+                  <button
+                    onClick={createGame}
+                    disabled={loading}
+                    className="create-game-btn"
+                    data-testid="landing-create-btn"
+                  >
+                    {loading ? 'Creating Galaxy…' : 'Create New Game'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Paste game code from your host"
+                    value={joinGameId}
+                    onChange={(e) => setJoinGameId(e.target.value)}
+                    className="player-name-input"
+                    style={{ fontFamily: 'monospace' }}
+                    data-testid="landing-join-code"
+                  />
+                  <button
+                    onClick={joinGame}
+                    disabled={loading}
+                    className="create-game-btn"
+                    data-testid="landing-join-btn"
+                  >
+                    {loading ? 'Joining…' : 'Join Game'}
+                  </button>
+                </>
+              )}
             </div>
-            
-            {error && <div className="error-message">{error}</div>}
+
+            {error && <div className="error-message" data-testid="landing-error">{error}</div>}
           </div>
         </div>
       </div>
     );
+  }
+
+  // In a game but not yet in activity phase → show lobby
+  if (gameState && gameState.phase && gameState.phase !== 'activity') {
+    return renderLobby();
   }
 
   return (
@@ -2123,47 +2366,78 @@ function App() {
               )}
             </span>
           </div>
+
+          {/* Shareable game-code chip (visible to all players in-game) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', padding: '4px 8px', borderRadius: 999, fontSize: 12 }}>
+            <span style={{ color: '#94a3b8' }}>Code:</span>
+            <span style={{ fontFamily: 'monospace', color: '#f8fafc' }} data-testid="game-code-chip">
+              {currentGame ? currentGame.slice(0, 8) : ''}
+            </span>
+            <button
+              onClick={copyShareLink}
+              style={{ padding: '2px 8px', fontSize: 11, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0', borderRadius: 999, cursor: 'pointer' }}
+              data-testid="game-code-copy"
+              title="Copy shareable join link"
+            >
+              {copiedFlag ? '✓' : 'Copy link'}
+            </button>
+          </div>
           
-          {/* Testing controls */}
-          {testingMode && (
-            <div className="testing-controls">
-              <label>Testing Mode:</label>
-              <select 
-                value={currentPlayer || ''} 
-                onChange={(e) => switchPlayer(e.target.value)}
-                className="player-selector"
-              >
-                {availablePlayers.map(player => (
-                  <option key={player.id} value={player.id} style={{ color: getPlayerColor(player.id) }}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-              
-              {gameState?.phase === 'activity' && (
-                <button onClick={resolveTurn} className="resolve-turn-btn">
-                  Resolve Turn
-                </button>
-              )}
-              
-              {gameState?.combat_reports && gameState.combat_reports.length > 0 && (
-                <button 
-                  onClick={() => setShowCombatReports(!showCombatReports)} 
-                  className="combat-reports-btn"
+          {/* Always-visible game controls (available to every player) */}
+          <div className="testing-controls">
+            {testingMode && (
+              <>
+                <label>Testing Mode:</label>
+                <select
+                  value={currentPlayer || ''}
+                  onChange={(e) => switchPlayer(e.target.value)}
+                  className="player-selector"
+                  data-testid="header-player-selector"
                 >
-                  Combat Reports ({gameState.combat_reports.length})
-                </button>
-              )}
-              
-              <button 
-                onClick={centerHomeWorld}
-                className="center-home-btn"
-                title="Center map on your home world"
-              >
-                Center Home
+                  {availablePlayers.map(player => (
+                    <option key={player.id} value={player.id} style={{ color: getPlayerColor(player.id) }}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {gameState?.phase === 'activity' && (
+              <button onClick={resolveTurn} className="resolve-turn-btn" data-testid="header-resolve-turn">
+                Resolve Turn
               </button>
-            </div>
-          )}
+            )}
+
+            {gameState?.combat_reports && gameState.combat_reports.length > 0 && (
+              <button
+                onClick={() => setShowCombatReports(!showCombatReports)}
+                className="combat-reports-btn"
+                data-testid="header-combat-reports"
+              >
+                Combat Reports ({gameState.combat_reports.length})
+              </button>
+            )}
+
+            <button
+              onClick={centerHomeWorld}
+              className="center-home-btn"
+              title="Center map on your home world"
+              data-testid="header-center-home"
+            >
+              Center Home
+            </button>
+
+            <button
+              onClick={() => setTestingMode(m => !m)}
+              className="center-home-btn"
+              title="Toggle solo testing (switch between all players in this game)"
+              data-testid="header-toggle-testing"
+              style={{ opacity: 0.6 }}
+            >
+              {testingMode ? 'Exit Solo' : 'Solo Mode'}
+            </button>
+          </div>
         </div>
 
         {/* Main game area */}

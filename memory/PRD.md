@@ -12,6 +12,15 @@ Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Clau
 
 ## Changelog
 
+### 2026-02-15 — Demo prep: two-browser multiplayer + lobby
+- **Landing page**: replaced single-form UI with a Create / Join tab layout. Create supports 2/3/4-player games; Join takes a game code and player name. URL params `?game=<id>` and `?name=<n>` auto-populate the join form for shareable links.
+- **Lobby (waiting room)**: after create/join, if the game isn't in `activity` phase yet, the player sees a lobby showing the game code, a copyable share link (`<origin>?game=<id>`), a player list with empty-slot placeholders, and a "Start Now (fill with AI)" button for the host (first joiner). State polls every 2s so joins show up live.
+- **In-game code chip**: the header now shows a small game-code chip with a "Copy link" button, so the host can invite spectators or replacements mid-game.
+- **Backend**: added `POST /api/game/{id}/start` which force-starts a game and fills empty slots with AI (or requires 2+ humans when `fill_with_ai=false`). `create-game` no longer auto-adds AI; users decide in the lobby.
+- **Active polling**: state is refreshed every 5s during `activity` phase too, so both browsers see turn resolutions and opponent moves without manual refresh.
+- **Header controls**: Resolve Turn, Combat Reports and Center Home are now always visible (not gated on Solo Mode). Added a "Solo Mode" toggle so demos can flip between players when useful.
+- **Combat panel placeholder rows**: the timeline now renders every turn from 1..current_turn and shows a "No combat this turn" row for empty turns, so the panel feels alive from turn 1 on.
+
 ### 2026-02-15 — Restore + multi-party combat + map order indicators
 - **Restored** working `server.py` (1173 lines) and `App.js` (2147 lines) from the git checkout after Grok's canonical patch had truncated both.
 - **Fixed** an App.css orphan `16px;` line that broke the frontend build.
