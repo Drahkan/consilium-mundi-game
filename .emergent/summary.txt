@@ -1,0 +1,20 @@
+<analysis>App.jsserver.pyrenderResourceWidgetrenderGalaxyMapApp.jsApp.jsrender*from pathlib import Pathif _db is not None/api/create-game/api/lobby/joinGameEngineserver.py/apiGameEnginebackend/server.pyfrontend/src/App.jsrenderGalaxyMapplayerStarfleetOrdersfrontend/src/App.jsconsilium-mundi-game/app/backend/persistence.py
+/app/
+├── backend/
+│   ├── server.py         # Main FastAPI application & game engine
+│   ├── persistence.py    # MongoDB DAO layer
+│   ├── requirements.txt  
+│   └── .env              # Backend env (MONGO_URL)
+├── frontend/
+│   ├── src/
+│   │   ├── App.js        # Monolithic React UI and state
+│   │   ├── App.css       # Styles
+│   │   └── index.js
+│   ├── package.json
+│   └── .env              # Frontend env (REACT_APP_BACKEND_URL)
+├── tests/
+│   ├── backend/test_api.py # Pytest suite
+│   └── e2e/              # E2E test stubs
+└── docs/
+    └── ConsiliumMundi-DD-v1.0.5.pdf  # Game Design Document
+App.jsgamesgamesmotorhttpxpytest-asynciobackend/requirements.txt/app/backend/server.py/app/frontend/src/App.js/app/backend/persistence.py/app/docs/ConsiliumMundi-DD-v1.0.5.pdfApp.jsserver.pyPOST /api/lobby/createPOST /api/lobby/joinPOST /api/lobby/{game_id}/startPOST /api/game/{game_id}/ordersPOST /api/game/{game_id}/readyPOST /api/game/{game_id}/resolveApp.jsserver.pyrender*.envREACT_APP_BACKEND_URL/apilocalStoragedevMode/app/docs/ConsiliumMundi-DD-v1.0.5.pdf/app/tests/backend/test_api.py/app/tests/e2e/README.mdApp.jsserver.py/api/create-game/app/tests/backend/test_api.py/app/tests/e2e/README.md/app/frontend/src/App.jsrenderGalaxyMaprenderResourceWidget/app/backend/server.pyGameEngine/api/create-gameplayers_index_for_gamebefore-grok-*</analysis>
