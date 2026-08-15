@@ -36,11 +36,11 @@ def test_add_ai_and_start_lobby(new_game):
     resp = client.post(f"/api/game/{game_id}/add-ai-players")
     assert resp.status_code == 200
 
-    # Force start lobby (phase -> activity and create starfleets)
-    resp2 = client.post(f"/api/lobby/{game_id}/start")
+    # Force start (fills any empty slots with AI, phase -> activity)
+    resp2 = client.post(f"/api/game/{game_id}/start", json={"fill_with_ai": True})
     assert resp2.status_code == 200
     data2 = resp2.json()
-    assert data2["status"] == "started"
+    assert data2["status"] in ("started", "already_started")
     assert data2["phase"] == "activity"
 
     # State should show activity and starfleets on home systems after start

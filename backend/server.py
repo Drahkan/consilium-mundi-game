@@ -28,7 +28,14 @@ class GameConfig(BaseModel):
     num_players: int = 4
     galaxy_size: str = "standard"  # small, standard, large
     turn_time_limit: int = 24  # hours (legacy)
-    turn_time_seconds: int = 300  # NEW: per-turn timer in seconds (default 5 min)
+    turn_time_seconds: int = 300  # per-turn timer in seconds (default 5 min)
+    # Fog of War mode. 'off' = full visibility (spectator/dev), 'basic' =
+    # own systems and systems 1 jump away are fully visible; everything else
+    # is HIDDEN. Reserved for future: 'extended' where certain upgrades grant
+    # PARTIAL visibility beyond the 1-jump radius. The visibility levels are
+    # decoupled from mode so new rules can be layered in without touching
+    # the serializer / frontend.
+    fow_mode: str = "basic"
 
 class PlayerAction(BaseModel):
     player_id: str
@@ -84,6 +91,14 @@ class GameEngine:
         self.current_turn = 1
         self.phase = "setup"  # setup, resource, upkeep, activity, resolution, trade, build
         self.turn_deadline = None
+        # Turn timer pause state
+        self.turn_paused = False
+        self.turn_paused_remaining = 0  # seconds left when paused
+        # Per-player "extended sight" set. Populated when a future upgrade
+        # grants a player extended visibility of a system (partial info only).
+        # Kept as a top-level dict so upgrade code can just mutate this
+        # without touching the visibility computation.
+        self.extended_sight = {}  # player_id -> set(system_id)
         
     def generate_galaxy(self):
         """Generate a balanced galaxy map with guaranteed connectivity"""
@@ -406,6 +421,8 @@ class GameEngine:
         if seconds < 30:
             seconds = 30
         self.turn_deadline = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        self.turn_paused = False
+        self.turn_paused_remaining = 0
 
     def auto_submit_pending_orders(self):
         """Auto-submit any pending orders for players who haven't explicitly finalized"""
@@ -968,38 +985,147 @@ class GameEngine:
                 if system_id in self.systems and self.systems[system_id].owner == player_id:
                     self.player_orders[player_id].append(order)
     
+    def compute_visibility(self, player_id: str):
+        """Compute per-system visibility for the given player.
+
+        Returns a dict {system_id: 'full' | 'partial' | 'hidden'}. Rules:
+          - fow_mode='off' → every system is 'full'
+          - fow_mode='basic' (default):
+              * FULL if the player owns the system, or the system is a
+                direct neighbour of a system the player owns, or the
+                system currently holds one of the player's starfleets.
+              * Systems in self.extended_sight[player_id] (populated by
+                future upgrades) are PARTIAL if not already FULL.
+              * Everything else is HIDDEN.
+
+        The visibility mapping is intentionally decoupled from the game
+        config's fow_mode so new rules (e.g., trade partners share sight,
+        a "wide-scan" upgrade, ally sharing) can be added by mutating
+        self.extended_sight or by adding another pass in this method.
+        """
+        mode = getattr(self.config, 'fow_mode', 'basic')
+        if mode == 'off':
+            return {sid: 'full' for sid in self.systems}
+
+        full = set()
+        # Own systems + their neighbours
+        for sid, s in self.systems.items():
+            if s.owner == player_id:
+                full.add(sid)
+                for adj in s.connections:
+                    if adj in self.systems:
+                        full.add(adj)
+        # Systems currently holding one of the player's fleets
+        for sf in self.starfleets.values():
+            if sf.owner == player_id and sf.system_id in self.systems:
+                full.add(sf.system_id)
+
+        # Reserved for future extended-sight upgrades: bump these to PARTIAL
+        partial = set(self.extended_sight.get(player_id, set())) - full
+
+        result = {}
+        for sid in self.systems:
+            if sid in full:
+                result[sid] = 'full'
+            elif sid in partial:
+                result[sid] = 'partial'
+            else:
+                result[sid] = 'hidden'
+        return result
+
+    def _serialize_system(self, s, visibility: str):
+        """Return a system dict shaped by the given visibility level.
+
+        HIDDEN:  Only coordinates + topology are revealed. No name, no
+                 owner, no fleets, no upgrades, no resources. Frontend
+                 renders these as fog-covered nodes labeled "???".
+        PARTIAL: Reveals system name/coords/topology, whether it is
+                 owned-by-any-player, and whether it has any upgrades —
+                 but not the identity of the owner, the specific
+                 upgrades, or fleet counts. This is the shape the
+                 planned "long-range scanner" upgrade should produce.
+        FULL:    Everything (current behaviour).
+        """
+        if visibility == 'hidden':
+            return {
+                "id": s.id,
+                "name": "???",
+                "x": s.x,
+                "y": s.y,
+                "owner": None,
+                "resources": None,
+                "connections": s.connections,   # topology remains visible
+                "starfleets": 0,
+                "starfleet_details": [],
+                "upgrades": [],
+                "is_home_system": False,
+                "visibility": "hidden",
+                "has_owner": None,
+                "has_upgrades": None,
+            }
+        if visibility == 'partial':
+            return {
+                "id": s.id,
+                "name": s.name,
+                "x": s.x,
+                "y": s.y,
+                "owner": None,                  # identity redacted
+                "resources": None,
+                "connections": s.connections,
+                "starfleets": 0,                # fleet counts redacted
+                "starfleet_details": [],
+                "upgrades": [],                 # specific upgrades redacted
+                "is_home_system": s.is_home_system,
+                "visibility": "partial",
+                "has_owner": s.owner is not None,
+                "has_upgrades": len(s.upgrades) > 0,
+            }
+        # full
+        return {
+            "id": s.id,
+            "name": s.name,
+            "x": s.x,
+            "y": s.y,
+            "owner": s.owner,
+            "resources": s.resources,
+            "connections": s.connections,
+            "starfleets": len(s.starfleets),
+            "starfleet_details": [
+                {"id": sf.id, "owner": sf.owner, "orders": sf.orders}
+                for sf in s.starfleets.values()
+            ],
+            "upgrades": s.upgrades,
+            "is_home_system": s.is_home_system,
+            "visibility": "full",
+            "has_owner": s.owner is not None,
+            "has_upgrades": len(s.upgrades) > 0,
+        }
+
     def get_game_state(self, player_id: str = None):
         """Get current game state (optionally filtered for specific player)"""
         deadline = getattr(self, 'turn_deadline', None)
         deadline_iso = deadline.isoformat() if isinstance(deadline, datetime) else None
+
+        # Compute visibility per system (falls back to 'full' when no
+        # player_id given — e.g., internal debug listings).
+        if player_id:
+            visibility_by_sid = self.compute_visibility(player_id)
+        else:
+            visibility_by_sid = {sid: 'full' for sid in self.systems}
+
+        systems_dict = {
+            sid: self._serialize_system(s, visibility_by_sid.get(sid, 'full'))
+            for sid, s in self.systems.items()
+        }
+
         return {
             "turn": self.current_turn,
             "phase": self.phase,
             "turn_deadline": deadline_iso,
             "turn_time_seconds": getattr(self.config, 'turn_time_seconds', 300),
-            "systems": {
-                sid: {
-                    "id": s.id,
-                    "name": s.name,
-                    "x": s.x,
-                    "y": s.y,
-                    "owner": s.owner,
-                    "resources": s.resources,
-                    "connections": s.connections,
-                    "starfleets": len(s.starfleets),
-                    "starfleet_details": [
-                        {
-                            "id": sf.id,
-                            "owner": sf.owner,
-                            "orders": sf.orders
-                        }
-                        for sf in s.starfleets.values()
-                    ],
-                    "upgrades": s.upgrades,
-                    "is_home_system": s.is_home_system
-                }
-                for sid, s in self.systems.items()
-            },
+            "turn_paused": bool(getattr(self, 'turn_paused', False)),
+            "turn_paused_remaining": int(getattr(self, 'turn_paused_remaining', 0) or 0),
+            "systems": systems_dict,
             "players": self.players,
             "player_resources": self.player_resources.get(player_id) if player_id else self.player_resources,
             "combat_reports": getattr(self, 'combat_reports', []),
@@ -1007,7 +1133,8 @@ class GameEngine:
             "config": {
                 "num_players": self.config.num_players,
                 "galaxy_size": self.config.galaxy_size,
-                "turn_time_seconds": getattr(self.config, 'turn_time_seconds', 300)
+                "turn_time_seconds": getattr(self.config, 'turn_time_seconds', 300),
+                "fow_mode": getattr(self.config, 'fow_mode', 'basic'),
             }
         }
 
@@ -1244,6 +1371,53 @@ async def resolve_turn(game_id: str):
         return {"status": "turn_resolved", "new_turn": game.current_turn}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/game/{game_id}/timer")
+async def control_timer(game_id: str, payload: Dict[str, Any]):
+    """Host controls for the turn timer.
+
+    Body: { "action": "pause" | "resume" | "extend", "seconds"?: 120 }
+    """
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    action = (payload or {}).get("action")
+    if game.phase != "activity":
+        raise HTTPException(status_code=400, detail="Timer only controllable during the activity phase")
+
+    now = datetime.now(timezone.utc)
+    if action == "pause":
+        if game.turn_paused:
+            return {"status": "already_paused", "turn_paused_remaining": game.turn_paused_remaining}
+        remaining = int((game.turn_deadline - now).total_seconds()) if game.turn_deadline else 0
+        game.turn_paused_remaining = max(0, remaining)
+        game.turn_paused = True
+        game.turn_deadline = None
+    elif action == "resume":
+        if not game.turn_paused:
+            return {"status": "already_running", "turn_deadline": game.turn_deadline.isoformat() if game.turn_deadline else None}
+        game.turn_deadline = now + timedelta(seconds=max(1, game.turn_paused_remaining))
+        game.turn_paused = False
+        game.turn_paused_remaining = 0
+    elif action == "extend":
+        seconds = int((payload or {}).get("seconds") or 120)
+        if game.turn_paused:
+            game.turn_paused_remaining += seconds
+        else:
+            if game.turn_deadline is None:
+                game.turn_deadline = now + timedelta(seconds=seconds)
+            else:
+                game.turn_deadline = game.turn_deadline + timedelta(seconds=seconds)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown timer action: {action!r}")
+
+    return {
+        "status": "ok",
+        "action": action,
+        "turn_paused": game.turn_paused,
+        "turn_paused_remaining": game.turn_paused_remaining,
+        "turn_deadline": game.turn_deadline.isoformat() if game.turn_deadline else None,
+    }
 
 @app.post("/api/game/{game_id}/action")
 async def submit_action(game_id: str, action: PlayerAction):

@@ -12,6 +12,19 @@ Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Clau
 
 ## Changelog
 
+### 2026-02-15 — Fog of War + Pause/Extend Timer
+- **Backend visibility architecture** (`GameEngine.compute_visibility` + `_serialize_system`):
+  - Three visibility levels per (player, system): `full`, `partial`, `hidden`.
+  - `basic` mode (default): a system is FULL if the player owns it, is a direct neighbour of an owned system, or currently holds one of the player's fleets. Everything else is HIDDEN.
+  - `off` mode: everything is FULL (spectator / dev).
+  - Reserved for a future scanner-style upgrade: `GameEngine.extended_sight[player_id] = {system_id, …}`. Any system in that set that isn't already FULL is served as PARTIAL — name and coords only, plus presence-only flags (`has_owner`, `has_upgrades`) with owner identity / specific upgrades / fleet counts fully redacted. The upgrade itself hasn't been wired yet; the serializer and frontend both already speak this shape, so adding the actual game rule is a small, localized change.
+  - `HIDDEN` payloads leak nothing sensitive: name is `"???"`, `owner`/`resources`/`upgrades`/`starfleets`/`starfleet_details` are blanked, but `connections` (topology) is preserved so the player can still see and plan around the graph.
+  - New game-config field `fow_mode` (`'basic' | 'off'`, default `'basic'`).
+- **Frontend map**: renders visibility-aware nodes — fogged systems are muted grey dashed circles labeled `???`, PARTIAL systems use a neutral fill with `★` (owned by someone) and `+` (has upgrades) sigils, FULL systems keep the current look. System detail panel shows a dedicated "Unknown Space" view for HIDDEN and a "long-range scan" view for PARTIAL. Own income calculations already iterate only over FULL systems, so no consumer changes were needed.
+- **FoW selector in the Create form**: "Basic (recommended)" vs "Off — full galaxy visible (demo/dev)".
+- **Pause & Extend timer** (host-only): new endpoint `POST /api/game/{id}/timer` with actions `pause` / `resume` / `extend` (`seconds` default 120). Pausing freezes `turn_deadline` and stores `turn_paused_remaining`; extending while paused adds to `turn_paused_remaining`, extending while running pushes out `turn_deadline`. State exposes both fields. Header shows `⏸ PAUSED mm:ss` when paused and disables auto-resolve while paused. Host sees ⏸ Pause / ▶ Resume / +2 min buttons.
+- **Tests**: 6 new visibility tests (`tests/backend/test_visibility.py`) locking in the 1-jump rule, HIDDEN redaction, fleet-presence reveal, `off` mode, extended-sight PARTIAL flow, and the "extended sight never downgrades FULL" guarantee. Full backend suite: **14 passed / 1 skipped**.
+
 ### 2026-02-15 — Turn timer (server-authoritative, auto-resolve on expiry)
 - **Backend**: new `turn_time_seconds` field on `GameConfig` (default 300 = 5 min, clamped to a minimum of 30s). `GameEngine._reset_turn_deadline()` sets `turn_deadline` when a game enters `activity` (join-full, add-ai-fill, or explicit `/start`) and after every `resolve_turn()`. State now returns `turn_deadline` (ISO-8601) and `turn_time_seconds`.
 - **Frontend**: 

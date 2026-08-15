@@ -39,6 +39,7 @@ function App() {
   const [joinGameId, setJoinGameId] = useState('');
   const [numPlayersConfig, setNumPlayersConfig] = useState(2);
   const [turnSecondsConfig, setTurnSecondsConfig] = useState(300); // 5 min default
+  const [fowModeConfig, setFowModeConfig] = useState('basic'); // 'off' | 'basic'
   const [copiedFlag, setCopiedFlag] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(null);
   const lobbyPollRef = useRef(null);
@@ -89,7 +90,16 @@ function App() {
   // resolve-turn endpoint. Ref guard ensures we only fire once per turn.
   useEffect(() => {
     if (timerTickRef.current) clearInterval(timerTickRef.current);
-    if (!gameState || !gameState.turn_deadline || gameState.phase !== 'activity') {
+    if (!gameState || gameState.phase !== 'activity') {
+      setSecondsRemaining(null);
+      return undefined;
+    }
+    // Paused: show the frozen "remaining" value; no auto-resolve.
+    if (gameState.turn_paused) {
+      setSecondsRemaining(gameState.turn_paused_remaining || 0);
+      return undefined;
+    }
+    if (!gameState.turn_deadline) {
       setSecondsRemaining(null);
       return undefined;
     }
@@ -115,7 +125,7 @@ function App() {
         timerTickRef.current = null;
       }
     };
-  }, [gameState?.turn_deadline, gameState?.phase, gameState?.turn, availablePlayers, currentPlayer]);
+  }, [gameState?.turn_deadline, gameState?.phase, gameState?.turn, gameState?.turn_paused, gameState?.turn_paused_remaining, availablePlayers, currentPlayer]);
 
   // Create a new game
   const createGame = async () => {
@@ -137,7 +147,8 @@ function App() {
             num_players: numPlayersConfig,
             galaxy_size: "standard",
             turn_time_limit: 24,
-            turn_time_seconds: turnSecondsConfig
+            turn_time_seconds: turnSecondsConfig,
+            fow_mode: fowModeConfig
           }
         })
       });
@@ -210,6 +221,28 @@ function App() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Host timer controls: pause / resume / extend the current turn's countdown.
+  const controlTimer = async (action, seconds) => {
+    if (!currentGame) return;
+    try {
+      const body = { action };
+      if (typeof seconds === 'number') body.seconds = seconds;
+      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/timer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.detail || 'Timer action failed');
+      }
+      // Refresh state right away so the chip reflects the new deadline
+      await loadGameState(currentGame, currentPlayer);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -1686,66 +1719,87 @@ function App() {
             })}
 
             {/* Draw systems */}
-            {systems.map(system => (
-              <g key={system.id}>
-                {/* System circle */}
-                <circle
-                  cx={system.x}
-                  cy={system.y}
-                  r={system.is_home_system ? "12" : "8"}
-                  fill={getPlayerColor(system.owner)}
-                  stroke={selectedSystem === system.id ? "#ffd700" : "#ffffff"}
-                  strokeWidth={selectedSystem === system.id ? "3" : system.is_home_system ? "2" : "1"}
-                  className="system-node"
-                  onClick={() => handleSystemClick(system.id)}
-                  onDoubleClick={() => handleSystemDoubleClick(system.id)}
-                  style={{ cursor: 'pointer' }}
-                />
-                
-                {/* System name */}
-                <text
-                  x={system.x}
-                  y={system.y - 18}
-                  fill="#ffffff"
-                  fontSize="10"
-                  textAnchor="middle"
-                  className="system-label"
-                >
-                  {system.name}
-                </text>
-                
-                {/* Resource indicators */}
-                <text
-                  x={system.x}
-                  y={system.y + 25}
-                  fill="#a0aec0"
-                  fontSize="8"
-                  textAnchor="middle"
-                  className="resource-label"
-                >
-                  T:{system.resources.tech} M:{system.resources.metals} C:{system.resources.chon}
-                </text>
-                
-                {/* Starfleet indicators */}
-                {system.starfleet_details && system.starfleet_details.map((starfleet, index) => (
+            {systems.map(system => {
+              const vis = system.visibility || 'full';
+              const isHidden = vis === 'hidden';
+              const isPartial = vis === 'partial';
+              const radius = isHidden ? 6 : (system.is_home_system ? 12 : 8);
+              // Owner color: HIDDEN → dark grey; PARTIAL → neutral grey
+              // (owner identity is redacted); FULL → real owner color
+              const fillColor = isHidden
+                ? '#2a2f3a'
+                : isPartial
+                  ? (system.has_owner ? '#64748b' : '#334155')
+                  : getPlayerColor(system.owner);
+              const strokeColor = selectedSystem === system.id
+                ? '#ffd700'
+                : (isHidden ? '#475569' : '#ffffff');
+              return (
+                <g key={system.id} opacity={isHidden ? 0.7 : 1}>
                   <circle
-                    key={starfleet.id}
-                    cx={system.x + 10 + (index * 8)}
-                    cy={system.y - 10}
-                    r="4"
-                    fill={getPlayerColor(starfleet.owner)}
-                    stroke={selectedStarfleet === starfleet.id ? "#ffd700" : "#ffffff"}
-                    strokeWidth={selectedStarfleet === starfleet.id ? "2" : "1"}
-                    className="starfleet-node"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStarfleetClick(starfleet.id, system.id);
-                    }}
+                    cx={system.x}
+                    cy={system.y}
+                    r={radius}
+                    fill={fillColor}
+                    stroke={strokeColor}
+                    strokeWidth={selectedSystem === system.id ? "3" : system.is_home_system ? "2" : "1"}
+                    strokeDasharray={isHidden ? '3 2' : (isPartial ? '5 3' : '0')}
+                    className="system-node"
+                    onClick={() => handleSystemClick(system.id)}
+                    onDoubleClick={() => handleSystemDoubleClick(system.id)}
                     style={{ cursor: 'pointer' }}
                   />
-                ))}
-              </g>
-            ))}
+
+                  {/* System name (or ??? when hidden) */}
+                  <text
+                    x={system.x}
+                    y={system.y - 18}
+                    fill={isHidden ? '#64748b' : '#ffffff'}
+                    fontSize="10"
+                    textAnchor="middle"
+                    className="system-label"
+                    style={{ fontStyle: isHidden ? 'italic' : 'normal' }}
+                  >
+                    {isHidden ? '???' : system.name}
+                    {isPartial && system.has_owner ? ' ★' : ''}
+                    {isPartial && system.has_upgrades ? ' +' : ''}
+                  </text>
+
+                  {/* Resource indicators — only for FULL visibility */}
+                  {vis === 'full' && system.resources && (
+                    <text
+                      x={system.x}
+                      y={system.y + 25}
+                      fill="#a0aec0"
+                      fontSize="8"
+                      textAnchor="middle"
+                      className="resource-label"
+                    >
+                      T:{system.resources.tech} M:{system.resources.metals} C:{system.resources.chon}
+                    </text>
+                  )}
+
+                  {/* Starfleet indicators — only FULL exposes fleets */}
+                  {vis === 'full' && system.starfleet_details && system.starfleet_details.map((starfleet, index) => (
+                    <circle
+                      key={starfleet.id}
+                      cx={system.x + 10 + (index * 8)}
+                      cy={system.y - 10}
+                      r="4"
+                      fill={getPlayerColor(starfleet.owner)}
+                      stroke={selectedStarfleet === starfleet.id ? "#ffd700" : "#ffffff"}
+                      strokeWidth={selectedStarfleet === starfleet.id ? "2" : "1"}
+                      className="starfleet-node"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStarfleetClick(starfleet.id, system.id);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  ))}
+                </g>
+              );
+            })}
           </g>
         </svg>
       </div>
@@ -1755,24 +1809,55 @@ function App() {
   // Render system details
   const renderSystemDetails = () => {
     if (!selectedSystem || !gameState) return null;
-    
+
     const system = gameState.systems[selectedSystem];
     if (!system) return null;
-    
+
+    const vis = system.visibility || 'full';
+
+    if (vis === 'hidden') {
+      return (
+        <div className="system-details" data-testid="system-details">
+          <h3 style={{ fontStyle: 'italic', color: '#94a3b8' }}>Unknown Space</h3>
+          <div className="system-info">
+            <p style={{ color: '#94a3b8' }}>
+              Your scanners cannot penetrate this region of the galaxy. Move a starfleet or capture a neighbouring system to reveal what lies here.
+            </p>
+            <p style={{ fontSize: 12, color: '#64748b' }}>Connections: {system.connections?.length || 0}</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (vis === 'partial') {
+      return (
+        <div className="system-details" data-testid="system-details">
+          <h3>{system.name} <span style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>(long-range scan)</span></h3>
+          <div className="system-info">
+            <p><strong>Owner:</strong> {system.has_owner ? 'Claimed by a rival' : 'Uncontrolled'}</p>
+            <p><strong>Upgrades:</strong> {system.has_upgrades ? 'One or more (details unknown)' : 'None detected'}</p>
+            <p style={{ color: '#94a3b8', fontStyle: 'italic', marginTop: 8 }}>
+              Fleet strength, resources and specific upgrades cannot be resolved at this range.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="system-details">
+      <div className="system-details" data-testid="system-details">
         <h3>{system.name}</h3>
         <div className="system-info">
           <p><strong>Owner:</strong> {
-            system.owner 
+            system.owner
               ? getPlayerName(system.owner)
               : 'Uncontrolled'
           }</p>
           <p><strong>Resources per turn:</strong></p>
           <ul>
-            <li>Tech: {system.resources.tech}</li>
-            <li>Metals: {system.resources.metals}</li>
-            <li>CHON: {system.resources.chon}</li>
+            <li>Tech: {system.resources?.tech ?? 0}</li>
+            <li>Metals: {system.resources?.metals ?? 0}</li>
+            <li>CHON: {system.resources?.chon ?? 0}</li>
           </ul>
           <p><strong>Starfleets:</strong> {system.starfleets}</p>
           <p><strong>Upgrades:</strong> {system.upgrades.join(', ') || 'None'}</p>
@@ -2360,6 +2445,18 @@ function App() {
                     <option value={900}>15 minutes</option>
                     <option value={1800}>30 minutes</option>
                   </select>
+                  <label style={{ display: 'block', textAlign: 'left', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0.75rem 0 0.25rem 2px' }}>
+                    Fog of War
+                  </label>
+                  <select
+                    value={fowModeConfig}
+                    onChange={(e) => setFowModeConfig(e.target.value)}
+                    className="player-name-input"
+                    data-testid="landing-fow-mode"
+                  >
+                    <option value="basic">Basic — reveal 1 jump from owned systems</option>
+                    <option value="off">Off — full galaxy visible (demo/dev)</option>
+                  </select>
                   <button
                     onClick={createGame}
                     disabled={loading}
@@ -2422,27 +2519,63 @@ function App() {
             {secondsRemaining !== null && gameState?.phase === 'activity' && (() => {
               const mm = String(Math.floor(secondsRemaining / 60)).padStart(2, '0');
               const ss = String(secondsRemaining % 60).padStart(2, '0');
-              const urgent = secondsRemaining <= 30;
+              const paused = !!gameState.turn_paused;
+              const urgent = !paused && secondsRemaining <= 30;
               return (
                 <span
                   data-testid="turn-timer"
-                  title="Turn auto-resolves when this hits zero"
+                  title={paused ? 'Turn timer paused by host' : 'Turn auto-resolves when this hits zero'}
                   style={{
                     marginLeft: 12,
                     padding: '2px 10px',
                     fontFamily: 'monospace',
                     fontSize: 13,
                     borderRadius: 999,
-                    background: urgent ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)',
-                    color: urgent ? '#fca5a5' : '#e2e8f0',
-                    border: `1px solid ${urgent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                    background: paused ? 'rgba(148,163,184,0.15)' : (urgent ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)'),
+                    color: paused ? '#cbd5e1' : (urgent ? '#fca5a5' : '#e2e8f0'),
+                    border: `1px solid ${paused ? 'rgba(148,163,184,0.4)' : (urgent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.15)')}`,
                     animation: urgent ? 'pulse 1s ease-in-out infinite' : 'none',
                   }}
                 >
-                  ⏱ {mm}:{ss}
+                  {paused ? '⏸ PAUSED' : '⏱'} {mm}:{ss}
                 </span>
               );
             })()}
+            {/* Host-only timer controls */}
+            {gameState?.phase === 'activity' && availablePlayers.length > 0 && availablePlayers[0].id === currentPlayer && (
+              <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6 }} data-testid="host-timer-controls">
+                {gameState.turn_paused ? (
+                  <button
+                    onClick={() => controlTimer('resume')}
+                    className="center-home-btn"
+                    style={{ padding: '2px 10px', fontSize: 12 }}
+                    data-testid="timer-resume"
+                    title="Resume the turn timer"
+                  >
+                    ▶ Resume
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => controlTimer('pause')}
+                    className="center-home-btn"
+                    style={{ padding: '2px 10px', fontSize: 12 }}
+                    data-testid="timer-pause"
+                    title="Pause the turn timer"
+                  >
+                    ⏸ Pause
+                  </button>
+                )}
+                <button
+                  onClick={() => controlTimer('extend', 120)}
+                  className="center-home-btn"
+                  style={{ padding: '2px 10px', fontSize: 12 }}
+                  data-testid="timer-extend"
+                  title="Add 2 minutes to the current turn timer"
+                >
+                  +2 min
+                </button>
+              </span>
+            )}
           </div>
 
           {/* Shareable game-code chip (visible to all players in-game) */}
