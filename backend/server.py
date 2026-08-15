@@ -6,7 +6,7 @@ import os
 import uuid
 import random
 import math
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import json
 
 app = FastAPI()
@@ -27,7 +27,8 @@ players: Dict[str, Any] = {}
 class GameConfig(BaseModel):
     num_players: int = 4
     galaxy_size: str = "standard"  # small, standard, large
-    turn_time_limit: int = 24  # hours
+    turn_time_limit: int = 24  # hours (legacy)
+    turn_time_seconds: int = 300  # NEW: per-turn timer in seconds (default 5 min)
 
 class PlayerAction(BaseModel):
     player_id: str
@@ -387,6 +388,7 @@ class GameEngine:
             # Advance turn
             self.current_turn += 1
             self.phase = "activity"
+            self._reset_turn_deadline()
             
             # Clear orders for next turn
             for starfleet in self.starfleets.values():
@@ -395,6 +397,15 @@ class GameEngine:
             print(f"Turn resolution error: {e}")
             # Continue anyway to prevent game from getting stuck
             self.current_turn += 1
+            self._reset_turn_deadline()
+
+    def _reset_turn_deadline(self):
+        """Reset the countdown clock for the current activity phase."""
+        seconds = getattr(self.config, 'turn_time_seconds', 300) or 300
+        # Guard: never let a demo host accidentally set a punishingly short timer
+        if seconds < 30:
+            seconds = 30
+        self.turn_deadline = datetime.now(timezone.utc) + timedelta(seconds=seconds)
 
     def auto_submit_pending_orders(self):
         """Auto-submit any pending orders for players who haven't explicitly finalized"""
@@ -959,9 +970,13 @@ class GameEngine:
     
     def get_game_state(self, player_id: str = None):
         """Get current game state (optionally filtered for specific player)"""
+        deadline = getattr(self, 'turn_deadline', None)
+        deadline_iso = deadline.isoformat() if isinstance(deadline, datetime) else None
         return {
             "turn": self.current_turn,
             "phase": self.phase,
+            "turn_deadline": deadline_iso,
+            "turn_time_seconds": getattr(self.config, 'turn_time_seconds', 300),
             "systems": {
                 sid: {
                     "id": s.id,
@@ -991,7 +1006,8 @@ class GameEngine:
             "victory_status": self.check_victory_condition(),
             "config": {
                 "num_players": self.config.num_players,
-                "galaxy_size": self.config.galaxy_size
+                "galaxy_size": self.config.galaxy_size,
+                "turn_time_seconds": getattr(self.config, 'turn_time_seconds', 300)
             }
         }
 
@@ -1046,6 +1062,7 @@ async def join_game(request: JoinGameRequest):
     if len(game.players) == game.config.num_players:
         game.create_initial_starfleets()
         game.phase = "activity"
+        game._reset_turn_deadline()
     
     return {
         "game_id": request.game_id,
@@ -1083,6 +1100,7 @@ async def add_ai_players(game_id: str):
     if len(game.players) == game.config.num_players:
         game.create_initial_starfleets()
         game.phase = "activity"
+        game._reset_turn_deadline()
     
     return {
         "game_id": game_id,
@@ -1126,6 +1144,7 @@ async def start_game(game_id: str, payload: Optional[Dict[str, Any]] = None):
 
     game.create_initial_starfleets()
     game.phase = "activity"
+    game._reset_turn_deadline()
 
     return {
         "status": "started",

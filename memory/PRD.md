@@ -12,6 +12,14 @@ Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Clau
 
 ## Changelog
 
+### 2026-02-15 — Turn timer (server-authoritative, auto-resolve on expiry)
+- **Backend**: new `turn_time_seconds` field on `GameConfig` (default 300 = 5 min, clamped to a minimum of 30s). `GameEngine._reset_turn_deadline()` sets `turn_deadline` when a game enters `activity` (join-full, add-ai-fill, or explicit `/start`) and after every `resolve_turn()`. State now returns `turn_deadline` (ISO-8601) and `turn_time_seconds`.
+- **Frontend**: 
+  - Create form has a "Turn timer" selector (2 / 5 (recommended) / 10 / 15 / 30 minutes).
+  - Header shows a live monospace countdown chip (`⏱ mm:ss`) beside turn info; turns amber-red and pulses when ≤ 30s remain.
+  - Client ticks once per second off the server deadline, so refreshes/clock drift don't desync.
+  - Auto-resolve is driven only by the host browser (first player in the roster) with a per-turn ref guard, so the other browsers won't fire duplicate resolves.
+
 ### 2026-02-15 — Demo prep: two-browser multiplayer + lobby
 - **Landing page**: replaced single-form UI with a Create / Join tab layout. Create supports 2/3/4-player games; Join takes a game code and player name. URL params `?game=<id>` and `?name=<n>` auto-populate the join form for shareable links.
 - **Lobby (waiting room)**: after create/join, if the game isn't in `activity` phase yet, the player sees a lobby showing the game code, a copyable share link (`<origin>?game=<id>`), a player list with empty-slot placeholders, and a "Start Now (fill with AI)" button for the host (first joiner). State polls every 2s so joins show up live.

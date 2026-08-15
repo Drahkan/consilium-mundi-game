@@ -38,8 +38,12 @@ function App() {
   const [landingMode, setLandingMode] = useState('create'); // 'create' | 'join'
   const [joinGameId, setJoinGameId] = useState('');
   const [numPlayersConfig, setNumPlayersConfig] = useState(2);
+  const [turnSecondsConfig, setTurnSecondsConfig] = useState(300); // 5 min default
   const [copiedFlag, setCopiedFlag] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(null);
   const lobbyPollRef = useRef(null);
+  const timerTickRef = useRef(null);
+  const autoResolveFiredRef = useRef({}); // { turnNumber: true }
   
   // Map navigation state
   const [mapZoom, setMapZoom] = useState(1);
@@ -79,6 +83,40 @@ function App() {
     };
   }, [currentGame, currentPlayer, gameState?.phase]);
 
+  // Turn countdown: ticks once per second, computes remaining seconds from the
+  // server-authoritative deadline (accounts for clock drift and page refreshes).
+  // When it hits zero, the "host" (first player in the roster) auto-fires the
+  // resolve-turn endpoint. Ref guard ensures we only fire once per turn.
+  useEffect(() => {
+    if (timerTickRef.current) clearInterval(timerTickRef.current);
+    if (!gameState || !gameState.turn_deadline || gameState.phase !== 'activity') {
+      setSecondsRemaining(null);
+      return undefined;
+    }
+    const deadlineMs = new Date(gameState.turn_deadline).getTime();
+    const tick = () => {
+      const remaining = Math.max(0, Math.round((deadlineMs - Date.now()) / 1000));
+      setSecondsRemaining(remaining);
+      if (remaining <= 0) {
+        // Only the host issues resolve to avoid duplicate calls from N browsers
+        const isHost = availablePlayers.length > 0 && availablePlayers[0].id === currentPlayer;
+        const turnKey = String(gameState.turn);
+        if (isHost && !autoResolveFiredRef.current[turnKey]) {
+          autoResolveFiredRef.current[turnKey] = true;
+          resolveTurn();
+        }
+      }
+    };
+    tick();
+    timerTickRef.current = setInterval(tick, 1000);
+    return () => {
+      if (timerTickRef.current) {
+        clearInterval(timerTickRef.current);
+        timerTickRef.current = null;
+      }
+    };
+  }, [gameState?.turn_deadline, gameState?.phase, gameState?.turn, availablePlayers, currentPlayer]);
+
   // Create a new game
   const createGame = async () => {
     if (!playerName.trim()) {
@@ -98,7 +136,8 @@ function App() {
           config: {
             num_players: numPlayersConfig,
             galaxy_size: "standard",
-            turn_time_limit: 24
+            turn_time_limit: 24,
+            turn_time_seconds: turnSecondsConfig
           }
         })
       });
@@ -2306,6 +2345,21 @@ function App() {
                     <option value={3}>3 players</option>
                     <option value={4}>4 players</option>
                   </select>
+                  <label style={{ display: 'block', textAlign: 'left', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0.75rem 0 0.25rem 2px' }}>
+                    Turn timer (auto-resolves at zero)
+                  </label>
+                  <select
+                    value={turnSecondsConfig}
+                    onChange={(e) => setTurnSecondsConfig(parseInt(e.target.value, 10))}
+                    className="player-name-input"
+                    data-testid="landing-turn-timer"
+                  >
+                    <option value={120}>2 minutes</option>
+                    <option value={300}>5 minutes (recommended)</option>
+                    <option value={600}>10 minutes</option>
+                    <option value={900}>15 minutes</option>
+                    <option value={1800}>30 minutes</option>
+                  </select>
                   <button
                     onClick={createGame}
                     disabled={loading}
@@ -2365,6 +2419,30 @@ function App() {
                 </span>
               )}
             </span>
+            {secondsRemaining !== null && gameState?.phase === 'activity' && (() => {
+              const mm = String(Math.floor(secondsRemaining / 60)).padStart(2, '0');
+              const ss = String(secondsRemaining % 60).padStart(2, '0');
+              const urgent = secondsRemaining <= 30;
+              return (
+                <span
+                  data-testid="turn-timer"
+                  title="Turn auto-resolves when this hits zero"
+                  style={{
+                    marginLeft: 12,
+                    padding: '2px 10px',
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    borderRadius: 999,
+                    background: urgent ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)',
+                    color: urgent ? '#fca5a5' : '#e2e8f0',
+                    border: `1px solid ${urgent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                    animation: urgent ? 'pulse 1s ease-in-out infinite' : 'none',
+                  }}
+                >
+                  ⏱ {mm}:{ss}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Shareable game-code chip (visible to all players in-game) */}
