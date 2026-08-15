@@ -12,6 +12,15 @@ Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Clau
 
 ## Changelog
 
+### 2026-02-15 — Ready-Up + Retreat Rally Points
+- **Ready-up flow**: `POST /api/game/{id}/ready` `{player_id, ready}`. When every player in the roster flags ready, the backend auto-runs `resolve_turn()`. `_reset_turn_deadline()` clears the ready set on each new activity phase so it never carries over. State surfaces `ready_players: [id…]`.
+- **Header button**: shows `Ready (N/M)`, turns green with `✓ Ready` once the current player flags in. Ties into existing 5s polling so all browsers see the count climb in near-real-time; when the last player readies up, everyone auto-lands on the next turn.
+- **Retreat rally points**: `Starfleet.rally_point` (already an attribute — previously unused) now drives `retreat_starfleet()`. On retreat the fleet teleports to its rally point if that system is still friend-owned; captured/destabilised rally points are silently ignored so a fleet can never rally into hostile territory.
+- **API**: `POST /api/game/{id}/starfleets/{sf_id}/rally` `{player_id, rally_system_id | null}`. Validated at set-time: rally must be `null` or a system currently owned by the requesting player. `rally_point` is now surfaced in every FULL `starfleet_details` entry.
+- **UI**: In the system detail panel, every fleet the current player owns gets a "Rally point (on retreat)" dropdown listing all their owned systems (or `— None (stay put) —`).
+- **Tests** (`tests/backend/test_rally_and_ready.py`, 7 new): rally teleport to friendly system, rally no-op with no target, rally silently ignored when captured by enemy, endpoint rejects enemy-owned rally, endpoint clear-with-null, partial ready does not resolve, all ready auto-resolves and clears set, unready removes from set. **Full suite: 21 passed / 1 skipped.**
+- **Design-Doc TODO parked**: Shared Sight With Allies deferred to Diplomacy work — will need to decide how sharing is opted-in and whether it uses `extended_sight` (PARTIAL) or a full-sight variant when we get there.
+
 ### 2026-02-15 — Fog of War + Pause/Extend Timer
 - **Backend visibility architecture** (`GameEngine.compute_visibility` + `_serialize_system`):
   - Three visibility levels per (player, system): `full`, `partial`, `hidden`.

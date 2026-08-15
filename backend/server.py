@@ -94,6 +94,9 @@ class GameEngine:
         # Turn timer pause state
         self.turn_paused = False
         self.turn_paused_remaining = 0  # seconds left when paused
+        # Ready-up tracking: players who have declared themselves ready
+        # for the turn to resolve. Cleared on every new activity phase.
+        self.ready_players = set()
         # Per-player "extended sight" set. Populated when a future upgrade
         # grants a player extended visibility of a system (partial info only).
         # Kept as a top-level dict so upgrade code can just mutate this
@@ -423,6 +426,8 @@ class GameEngine:
         self.turn_deadline = datetime.now(timezone.utc) + timedelta(seconds=seconds)
         self.turn_paused = False
         self.turn_paused_remaining = 0
+        # Every new activity phase starts with nobody ready.
+        self.ready_players = set()
 
     def auto_submit_pending_orders(self):
         """Auto-submit any pending orders for players who haven't explicitly finalized"""
@@ -758,10 +763,28 @@ class GameEngine:
             delattr(target_system, 'counter_espionage')
     
     def retreat_starfleet(self, starfleet: Starfleet):
-        """Handle starfleet retreat"""
-        # For now, just keep it in current system
-        # TODO: Implement proper retreat logic with rally points
-        pass
+        """Retreat: fall back to the pre-designated rally point if it is
+        set to a valid, currently-friendly system; otherwise the fleet
+        stays at its source (current behaviour).
+
+        A rally point that has since been captured or destabilised is
+        silently ignored so a fleet can never rally into hostile
+        territory. This makes rally points a real strategic choice —
+        a captured hub loses its value as a fallback.
+        """
+        rally = getattr(starfleet, 'rally_point', None)
+        if not rally or rally == starfleet.system_id:
+            return  # stay at source
+        rally_system = self.systems.get(rally)
+        if not rally_system:
+            return
+        if rally_system.owner != starfleet.owner:
+            return
+        old_system = self.systems.get(starfleet.system_id)
+        if old_system and starfleet.id in old_system.starfleets:
+            del old_system.starfleets[starfleet.id]
+        starfleet.system_id = rally
+        rally_system.starfleets[starfleet.id] = starfleet
     
     def destroy_starfleet(self, starfleet_id: str):
         """Remove a starfleet from the game"""
@@ -1091,7 +1114,7 @@ class GameEngine:
             "connections": s.connections,
             "starfleets": len(s.starfleets),
             "starfleet_details": [
-                {"id": sf.id, "owner": sf.owner, "orders": sf.orders}
+                {"id": sf.id, "owner": sf.owner, "orders": sf.orders, "rally_point": getattr(sf, 'rally_point', None)}
                 for sf in s.starfleets.values()
             ],
             "upgrades": s.upgrades,
@@ -1125,6 +1148,7 @@ class GameEngine:
             "turn_time_seconds": getattr(self.config, 'turn_time_seconds', 300),
             "turn_paused": bool(getattr(self, 'turn_paused', False)),
             "turn_paused_remaining": int(getattr(self, 'turn_paused_remaining', 0) or 0),
+            "ready_players": sorted(list(getattr(self, 'ready_players', set()))),
             "systems": systems_dict,
             "players": self.players,
             "player_resources": self.player_resources.get(player_id) if player_id else self.player_resources,
@@ -1418,6 +1442,80 @@ async def control_timer(game_id: str, payload: Dict[str, Any]):
         "turn_paused_remaining": game.turn_paused_remaining,
         "turn_deadline": game.turn_deadline.isoformat() if game.turn_deadline else None,
     }
+
+@app.post("/api/game/{game_id}/ready")
+async def set_ready(game_id: str, payload: Dict[str, Any]):
+    """Mark (or unmark) a player as ready to resolve the current turn.
+
+    Body: { "player_id": <str>, "ready": <bool> = true }
+
+    Auto-resolves the turn once every player in the roster has flagged
+    ready. Idempotent for repeated calls.
+    """
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    player_id = (payload or {}).get("player_id")
+    if not player_id or player_id not in game.players:
+        raise HTTPException(status_code=400, detail="Unknown player_id for this game")
+    ready = bool((payload or {}).get("ready", True))
+    if game.phase != "activity":
+        raise HTTPException(status_code=400, detail="Ready is only meaningful during the activity phase")
+
+    if ready:
+        game.ready_players.add(player_id)
+    else:
+        game.ready_players.discard(player_id)
+
+    resolved = False
+    if game.ready_players and len(game.ready_players) >= len(game.players):
+        try:
+            game.resolve_turn()
+            resolved = True
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Auto-resolve failed: {e}")
+
+    return {
+        "status": "ok",
+        "player_id": player_id,
+        "ready": player_id in game.ready_players,
+        "ready_players": sorted(list(game.ready_players)),
+        "total_players": len(game.players),
+        "resolved": resolved,
+        "current_turn": game.current_turn,
+    }
+
+@app.post("/api/game/{game_id}/starfleets/{starfleet_id}/rally")
+async def set_starfleet_rally(game_id: str, starfleet_id: str, payload: Dict[str, Any]):
+    """Set (or clear) the rally point for a starfleet.
+
+    Body: { "player_id": <str>, "rally_system_id": <str | null> }
+
+    The rally point must either be `null` (clear) or a system currently
+    owned by the same player. Enforcing that at set-time keeps the
+    retreat logic simple (no runtime friend/foe checks needed against
+    stale rally targets — retreat re-validates anyway).
+    """
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    sf = game.starfleets.get(starfleet_id)
+    if not sf:
+        raise HTTPException(status_code=404, detail="Starfleet not found")
+    player_id = (payload or {}).get("player_id")
+    if sf.owner != player_id:
+        raise HTTPException(status_code=403, detail="Not your starfleet")
+    rally_id = (payload or {}).get("rally_system_id")
+    if rally_id is None:
+        sf.rally_point = None
+    else:
+        target = game.systems.get(rally_id)
+        if not target:
+            raise HTTPException(status_code=400, detail="Rally system does not exist")
+        if target.owner != player_id:
+            raise HTTPException(status_code=400, detail="Rally system must be owned by you")
+        sf.rally_point = rally_id
+    return {"status": "ok", "starfleet_id": starfleet_id, "rally_point": sf.rally_point}
 
 @app.post("/api/game/{game_id}/action")
 async def submit_action(game_id: str, action: PlayerAction):

@@ -246,6 +246,47 @@ function App() {
     }
   };
 
+  // Ready-up: mark (or unmark) the current player as ready. When every
+  // player in the roster is ready the backend auto-resolves the turn.
+  const setReady = async (ready) => {
+    if (!currentGame || !currentPlayer) return;
+    try {
+      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/ready`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: currentPlayer, ready })
+      });
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.detail || 'Ready failed');
+      }
+      await loadGameState(currentGame, currentPlayer);
+      await loadGamePlayers(currentGame);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Rally point: designate a friendly system where this fleet should
+  // fall back to on retreat. Pass null to clear.
+  const setStarfleetRally = async (starfleetId, rallySystemId) => {
+    if (!currentGame || !currentPlayer) return;
+    try {
+      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/starfleets/${starfleetId}/rally`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: currentPlayer, rally_system_id: rallySystemId })
+      });
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.detail || 'Rally point update failed');
+      }
+      await loadGameState(currentGame, currentPlayer);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // Load game state with player-specific data
   const loadGameState = async (gameId, playerId = null) => {
     try {
@@ -1867,23 +1908,53 @@ function App() {
           {system.starfleet_details && system.starfleet_details.length > 0 && (
             <div className="starfleet-section">
               <h4>Starfleets:</h4>
-              {system.starfleet_details.map(starfleet => (
-                <div 
-                  key={starfleet.id} 
-                  className={`starfleet-item ${selectedStarfleet === starfleet.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedStarfleet(starfleet.id)}
-                >
-                  <p><strong>Owner:</strong> {getPlayerName(starfleet.owner)}</p>
-                  {starfleet.orders && (
-                    <p><strong>Orders:</strong> {starfleet.orders.type}</p>
-                  )}
-                  {starfleetOrders[starfleet.id] && (
-                    <p className="pending-order">
-                      <strong>Pending:</strong> {starfleetOrders[starfleet.id].order_type}
-                    </p>
-                  )}
-                </div>
-              ))}
+              {system.starfleet_details.map(starfleet => {
+                const ownedByMe = starfleet.owner === currentPlayer;
+                // Options for rally point: all systems the current player owns
+                const ownedSystems = ownedByMe
+                  ? Object.values(gameState.systems).filter(s => s.owner === currentPlayer)
+                  : [];
+                return (
+                  <div
+                    key={starfleet.id}
+                    className={`starfleet-item ${selectedStarfleet === starfleet.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedStarfleet(starfleet.id)}
+                  >
+                    <p><strong>Owner:</strong> {getPlayerName(starfleet.owner)}</p>
+                    {starfleet.orders && (
+                      <p><strong>Orders:</strong> {starfleet.orders.type}</p>
+                    )}
+                    {starfleetOrders[starfleet.id] && (
+                      <p className="pending-order">
+                        <strong>Pending:</strong> {starfleetOrders[starfleet.id].order_type}
+                      </p>
+                    )}
+                    {ownedByMe && (
+                      <div
+                        style={{ marginTop: 8 }}
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`rally-row-${starfleet.id}`}
+                      >
+                        <label style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>
+                          Rally point (on retreat)
+                        </label>
+                        <select
+                          value={starfleet.rally_point || ''}
+                          onChange={(e) => setStarfleetRally(starfleet.id, e.target.value || null)}
+                          className="player-name-input"
+                          style={{ marginTop: 4, fontSize: 12 }}
+                          data-testid={`rally-select-${starfleet.id}`}
+                        >
+                          <option value="">— None (stay put) —</option>
+                          {ownedSystems.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           
@@ -2619,6 +2690,25 @@ function App() {
                 Resolve Turn
               </button>
             )}
+
+            {gameState?.phase === 'activity' && currentPlayer && (() => {
+              const readySet = gameState.ready_players || [];
+              const iAmReady = readySet.includes(currentPlayer);
+              const total = (gameState.players || []).length || (availablePlayers?.length || 0);
+              return (
+                <button
+                  onClick={() => setReady(!iAmReady)}
+                  className="resolve-turn-btn"
+                  data-testid="header-ready-btn"
+                  title="Mark yourself ready — turn resolves when everyone is"
+                  style={{
+                    background: iAmReady ? 'linear-gradient(135deg, #16a34a, #15803d)' : undefined,
+                  }}
+                >
+                  {iAmReady ? '✓ Ready' : 'Ready'} ({readySet.length}/{total})
+                </button>
+              );
+            })()}
 
             {gameState?.combat_reports && gameState.combat_reports.length > 0 && (
               <button
