@@ -835,8 +835,12 @@ class GameEngine:
                 resources["metals"] -= 1
                 resources["chon"] -= 1
                 
-                # Create starfleet
-                fleet_id = f"fleet_{player_id}_{len(self.starfleets)}"
+                # Create starfleet. Use a uuid suffix rather than
+                # len(self.starfleets) -- that counter can repeat after
+                # fleets are destroyed and created ids would then collide
+                # with a still-alive fleet elsewhere, orphaning it in its
+                # system's roster once the colliding id gets destroyed.
+                fleet_id = f"fleet_{player_id}_{uuid.uuid4().hex[:8]}"
                 starfleet = Starfleet(fleet_id, player_id, system_id)
                 
                 system.starfleets[fleet_id] = starfleet
