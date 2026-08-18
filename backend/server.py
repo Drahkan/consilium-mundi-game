@@ -116,6 +116,15 @@ class GameEngine:
         # game-over screen.
         self.game_over = False
         self.final_victory = None
+        # Turn-by-turn history for the post-game Full Replay. Populated
+        # by `_snapshot_state()` after every successful resolve_turn (and
+        # once at galaxy generation for the initial "Turn 1 start"
+        # frame). Kept on the engine so it persists together with the
+        # rest of the game state — when the Mongo DAO in persistence.py
+        # gets wired to save/load whole engines, snapshots ride along
+        # automatically. For a live production environment with many
+        # concurrent games this list needs to be persisted (see PRD).
+        self.turn_snapshots = []
         
     def generate_galaxy(self):
         """Generate a balanced galaxy map with guaranteed connectivity"""
@@ -434,6 +443,7 @@ class GameEngine:
                 self.final_victory = {
                     **victory,
                     "final_turn": self.current_turn,
+                    "score_card": self._compute_score_card(),
                 }
                 # Freeze the timer so the frontend doesn't keep counting
                 # against a game that will never resolve another turn.
@@ -441,6 +451,9 @@ class GameEngine:
                 self.turn_paused = False
                 self.turn_paused_remaining = 0
                 self.ready_players = set()
+                # Snapshot the winning frame so the Full Replay ends
+                # exactly on the state that triggered the win.
+                self._snapshot_state()
                 return
             
             # Advance turn
@@ -451,6 +464,12 @@ class GameEngine:
             # Clear orders for next turn
             for starfleet in self.starfleets.values():
                 starfleet.orders = None
+
+            # Snapshot AFTER the turn advance so `turn` in the snapshot
+            # is the turn players are about to play (start-of-turn
+            # frame). The initial frame at galaxy-gen serves the same
+            # role for Turn 1.
+            self._snapshot_state()
         except Exception as e:
             print(f"Turn resolution error: {e}")
             # Continue anyway to prevent game from getting stuck
@@ -468,6 +487,12 @@ class GameEngine:
         self.turn_paused_remaining = 0
         # Every new activity phase starts with nobody ready.
         self.ready_players = set()
+        # Very first entry to the activity phase — capture the Turn 1
+        # start frame so the Full Replay has something to open on.
+        # Subsequent activity resets are covered by _snapshot_state
+        # calls at the end of resolve_turn().
+        if not self.turn_snapshots and self.phase == "activity":
+            self._snapshot_state()
 
     def auto_submit_pending_orders(self):
         """Auto-submit any pending orders for players who haven't explicitly finalized"""
@@ -971,12 +996,83 @@ class GameEngine:
             if count >= required_systems:
                 return {
                     "winner": player_id,
+                    "condition": "standard",
+                    "condition_label": "Standard Victory — controls more than half the galaxy",
                     "systems_controlled": count,
                     "total_systems": total_systems,
                     "required_systems": required_systems
                 }
         
         return None
+
+    def _compute_score_card(self):
+        """Snapshot per-player stats for the end-of-game score screen.
+
+        Includes both losers and winner so the game-over modal can show
+        how close everyone was. All fields are cheap to compute from
+        the live engine — no need to store this incrementally.
+        """
+        counts = {pid: {
+            "player_id": pid,
+            "systems": 0,
+            "starfleets": 0,
+            "upgrades": 0,
+            "resources": dict(self.player_resources.get(pid, {"tech": 0, "metals": 0, "chon": 0})),
+        } for pid in self.players}
+        for system in self.systems.values():
+            if system.owner in counts:
+                counts[system.owner]["systems"] += 1
+                counts[system.owner]["upgrades"] += len(system.upgrades or [])
+        for sf in self.starfleets.values():
+            if sf.owner in counts:
+                counts[sf.owner]["starfleets"] += 1
+        return list(counts.values())
+
+    def _snapshot_state(self):
+        """Freeze a compact, FoW-off snapshot of the whole map for the
+        Full Replay feature. Called after every advance in
+        `resolve_turn()` (including the victory-lock turn) and once at
+        galaxy generation for the "turn 1 start" frame.
+
+        Compact by design: only the fields the replay viewer actually
+        renders. Systems keep coords + owner + upgrades + resources +
+        connections + starfleet_ids; starfleets keep id/owner/system.
+        Combat reports for this turn are attached so the replay can
+        overlay them per-frame.
+        """
+        systems = {}
+        for sid, s in self.systems.items():
+            systems[sid] = {
+                "id": sid,
+                "name": s.name,
+                "x": s.x,
+                "y": s.y,
+                "owner": s.owner,
+                "upgrades": list(s.upgrades or []),
+                "resources": dict(s.resources or {}),
+                "connections": list(s.connections or []),
+                "is_home_system": bool(s.is_home_system),
+                "starfleet_ids": list(s.starfleets.keys()),
+            }
+        starfleets = {
+            sf.id: {"id": sf.id, "owner": sf.owner, "system_id": sf.system_id}
+            for sf in self.starfleets.values()
+        }
+        # Combat reports that landed on this turn — the engine appends
+        # to `combat_reports` during `resolve_system_combat`, so a
+        # snapshot taken right after resolve_turn will have the current
+        # turn's fights already in the list.
+        turn = self.current_turn
+        reports_this_turn = [r for r in getattr(self, "combat_reports", []) if r.get("turn") == turn]
+        self.turn_snapshots.append({
+            "turn": turn,
+            "phase": self.phase,
+            "systems": systems,
+            "starfleets": starfleets,
+            "player_resources": {pid: dict(res) for pid, res in self.player_resources.items()},
+            "combat_reports": reports_this_turn,
+        })
+
     def submit_espionage_orders(self, player_id: str, orders: List[Dict[str, Any]]):
         """Submit espionage orders for a player"""
         if self.phase != "activity":
@@ -1404,6 +1500,35 @@ async def get_game_players(game_id: str):
     
     return {"players": game_players}
 
+@app.get("/api/game/{game_id}/replay")
+async def get_game_replay(game_id: str):
+    """Return all turn snapshots for the Full Replay viewer.
+
+    FoW-off by design: replays exist for the post-mortem, when the
+    game is over and everyone gets to see what happened. Snapshot
+    shape mirrors the live map serializer just enough for the replay
+    renderer (systems w/ owner + upgrades + starfleet counts,
+    starfleet ownership, combat reports per turn, per-player
+    resources). Player display names are joined on so the client
+    doesn't need a second lookup per frame.
+    """
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    # Attach display names once, at read time, so we don't bloat
+    # every snapshot with duplicate name copies.
+    player_meta = [
+        {"id": pid, "name": players[pid]["name"] if pid in players else pid[:8]}
+        for pid in game.players
+    ]
+    return {
+        "game_id": game_id,
+        "players": player_meta,
+        "final_victory": getattr(game, "final_victory", None),
+        "game_over": bool(getattr(game, "game_over", False)),
+        "snapshots": list(getattr(game, "turn_snapshots", [])),
+    }
+
 @app.post("/api/game/{game_id}/orders")
 async def submit_orders(game_id: str, orders_data: Dict[str, Any]):
     """Submit starfleet orders for a player"""
@@ -1644,17 +1769,28 @@ async def _test_force_victory(game_id: str):
     if not game.players:
         raise HTTPException(status_code=400, detail="No players")
     game.game_over = True
+    try:
+        score_card = game._compute_score_card()
+    except Exception:
+        score_card = []
     game.final_victory = {
         "winner": game.players[0],
         "systems_controlled": 5,
         "total_systems": 8,
         "required_systems": 5,
         "final_turn": getattr(game, "current_turn", 1),
+        "condition": "standard",
+        "condition_label": "Standard Victory — controls more than half the galaxy",
+        "score_card": score_card,
     }
     game.turn_deadline = None
     game.turn_paused = False
     game.turn_paused_remaining = 0
     game.ready_players = set()
+    try:
+        game._snapshot_state()
+    except Exception:
+        pass
     return {"status": "locked", "final_victory": game.final_victory}
 
 

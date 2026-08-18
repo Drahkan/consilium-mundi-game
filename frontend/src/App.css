@@ -704,3 +704,310 @@ body {
 .game-over-home-btn:hover {
   background: #1d4ed8;
 }
+
+/* ---- End-of-game screen (redesigned) ---- */
+/* Header block */
+.game-over-eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+.game-over-header h1 {
+  font-size: 34px;
+  margin: 0;
+  letter-spacing: 1px;
+}
+.game-over-condition {
+  color: #cbd5e1;
+  font-size: 13px;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* Score card */
+.game-over-scorecard {
+  margin: 24px 0 8px 0;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b1220;
+}
+.scorecard-header,
+.scorecard-row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.7fr 0.7fr 0.9fr 1.4fr;
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.scorecard-header {
+  background: #0f172a;
+  color: #94a3b8;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #1e293b;
+}
+.scorecard-row {
+  color: #e2e8f0;
+  border-top: 1px solid #131c2e;
+}
+.scorecard-row-winner {
+  background: linear-gradient(90deg, rgba(37,99,235,0.08), transparent);
+  font-weight: 600;
+}
+.scorecard-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.winner-mark {
+  color: #fbbf24;
+  font-size: 14px;
+}
+.scorecard-res {
+  display: inline-flex;
+  gap: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.scorecard-res span { color: #cbd5e1; }
+
+/* Primary action row (game-related info) */
+.game-over-actions-primary {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.game-over-action-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.game-over-action-btn:hover { background: #1d4ed8; }
+
+/* Subdued exit row — deliberately small + muted + separated */
+.game-over-exit {
+  margin-top: 32px;
+  padding-top: 14px;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  justify-content: center;
+}
+.game-over-exit-btn {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #1e293b;
+  border-radius: 5px;
+  padding: 5px 14px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.game-over-exit-btn:hover { color: #94a3b8; border-color: #334155; }
+
+/* Widen the modal for the score card */
+.game-over-modal { max-width: 640px; }
+
+/* ---- Full Replay viewer ---- */
+.replay-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  background: rgba(2, 6, 23, 0.88);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.replay-shell {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 960px;
+  padding: 18px;
+  color: #e2e8f0;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+.replay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.replay-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.replay-fow-tag {
+  margin-left: 8px;
+  font-size: 10px;
+  color: #64748b;
+  border: 1px solid #1e293b;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.replay-close {
+  background: transparent;
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+.replay-map-wrap {
+  background: #020617;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.replay-map {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 4px;
+  border-top: 1px solid #1e293b;
+  border-bottom: 1px solid #1e293b;
+  margin-top: 12px;
+}
+.replay-btn {
+  background: #1e293b;
+  border: none;
+  color: #e2e8f0;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.replay-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.replay-btn.replay-play { background: #2563eb; font-weight: 600; }
+.replay-scrubber {
+  flex: 1;
+  accent-color: #2563eb;
+}
+.replay-turn-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: #cbd5e1;
+  min-width: 100px;
+  text-align: right;
+}
+.replay-turn-of { color: #64748b; font-size: 11px; }
+.replay-combat-list { margin-top: 12px; font-size: 12px; }
+.replay-combat-header {
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+.replay-combat-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #131c2e;
+}
+.replay-combat-outcome { color: #94a3b8; font-size: 11px; text-transform: uppercase; }
+.outcome-attacker_victory { color: #34d399; }
+.outcome-defender_victory { color: #60a5fa; }
+.outcome-contested { color: #fbbf24; }
+.outcome-stalemate { color: #94a3b8; }
+.outcome-automatic_capture { color: #a78bfa; }
+.replay-empty { color: #94a3b8; padding: 20px 0; text-align: center; }
+
+/* ---- Rally staging buttons ---- */
+.rally-set-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rally-set-btn:hover { background: #1d4ed8; }
+.rally-reset-btn {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #1e293b;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.rally-reset-btn:hover { color: #cbd5e1; border-color: #334155; }
+
+/* ---- Combat playback navigator ---- */
+.combat-playback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.combat-playback-btn {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.combat-playback-btn:hover { background: #334155; }
+.combat-playback-label {
+  flex: 1;
+  text-align: center;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.combat-playback-all-btn {
+  background: transparent;
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.combat-playback-all-btn:hover { border-color: #334155; color: #cbd5e1; }
+
+/* ---- Post-turn resource warning: subdued "Proceed anyway" ---- */
+.proceed-anyway-btn {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #1e293b;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+}
+.proceed-anyway-btn:hover { color: #cbd5e1; border-color: #334155; }

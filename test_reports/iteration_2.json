@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 2 — validated the 4 new features (Combat Timeline Playback, Rally Ghost Preview, End-Screen Score Card + Full Replay Modal, subdued Proceed-Anyway button). Backend: 12/12 pytest passed (test_replay.py + test_victory_lock_http.py). Live /api/game/{id}/replay 404 for unknown games verified. Frontend E2E via Playwright confirmed: game-over-overlay renders with winner name + condition label + scorecard (rows per player) + View Full Replay + subdued Return-to-Home; Full Replay overlay opens with all controls (play, prev, next, scrubber, turn-label, close); Return-to-Home strips ?game= and returns to landing. Rally Ghost Preview flow works end-to-end: dropdown → ghost flag on map → Set commits (real flag replaces ghost) → picking a different value shows Cancel → Cancel reverts to previous committed rally with no API call. Subdued Proceed-Anyway button verified in DOM+CSS: warning-cancel-btn is the prominent bg-blue-600 primary and warning-proceed-anyway-btn uses the muted 'proceed-anyway-btn' class. Combat Timeline Playback DOM markup is present in code and CSS class in stylesheet; live-panel visibility requires actual combat reports which solo-mode AI didn't produce in 3 resolve cycles — code-inspection confirmed all testids and behavior (stepFocus/clearFocus wired correctly). Minor test-scaffold fix: extended /_test/force-victory to include score_card + condition_label + snapshot so the frontend overlay renders realistically.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Galaxy map (React console)", "issues": ["PRE-EXISTING: Duplicate React key warnings still spam the console: 'conn-<a>-<b>' and 'rc-<a>-<b>' keys for connection lines. Was flagged in iteration_1 as well. Non-blocking but noisy on every render — connection keys should use [min,max].join('-') or dedupe at generation. Same warnings appear in the replay overlay ('rc-' keys)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/tests/backend/test_replay.py",
+    "/app/tests/backend/test_victory_lock_http.py",
+    "/app/test_reports/pytest/iter2.xml"
+  ],
+  "action_items": [
+    "Fix duplicate React key warnings in renderGalaxyMap and renderReplayViewer connection loops (conn-*, rc-* keys). Use `${Math.min(a,b)}-${Math.max(a,b)}` normalisation or dedupe the connection list.",
+    "OPTIONAL: The Combat Reports header button only appears when at least one combat report has been generated; in solo/AI-fill mode the AI takes no offensive orders so it stayed hidden through 3 resolve cycles. Consider surfacing an empty-state Combat Reports button (or hide only when there are truly zero combats across all turns) so the combat-playback UI is testable without a real 2-player battle."
+  ],
+  "critical_code_review_comments": [
+    "server.py _test/force-victory: was missing score_card + condition_label — extended in this iteration to call _compute_score_card() and take an end-of-game snapshot so the E2E overlay + replay-endpoint round-trip is realistic. Recommend the same pattern (or a proper fixture flag) in prod-facing paths — the game_over path in resolve_turn already does it correctly.",
+    "App.js renderVictoryStatus: cleanly sorts winner-first in the score card and applies distinct styling. Good.",
+    "App.js renderReplayViewer: correctly clamps replayTurnIdx to [0, snapshots.length-1] and toggles play from index 0 when already at the last frame — solid replay UX.",
+    "App.js rally dropdown block: `pendingRally` state correctly distinguishes '' (pending clear) vs committed rally; Set/Cancel only render when pending differs from committed. Ghost flag is only rendered for a valid non-self target, which matches spec.",
+    "App.js combat-playback: stepFocus/clearFocus correctly narrows combatFocusTurn state and the reports filter reads from it — verified by code inspection.",
+    "PRE-EXISTING (iteration_1): duplicate React key warnings for connection lines still present. Rendered in both galaxy map and replay map — same underlying connection list."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (extended _test/force-victory to populate score_card + condition_label + snapshot — no production paths touched)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None persisted; each test creates a fresh in-memory game via /api/create-game + fill-with-AI.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "EXPOSE_TEST_ENDPOINTS=1 is set in /app/backend/.env — the /_test/force-victory endpoint now populates a real score_card (via _compute_score_card) and a final snapshot (via _snapshot_state) so the game-over overlay + full-replay flow can be end-to-end verified without playing a real game. Frontend URL params only support ?game=&name= (no ?player=) — to test as an existing player you must go through the UI (create-game → start-now-fill-with-AI). Combat Reports header button only appears once combats have occurred — solo/AI-fill mode doesn't produce combat automatically, so combat-playback UI panel presence was verified via code inspection only (testids all present at App.js:2395-2405). Rally-select option value '' means 'no rally / stay put'; there is no 'CLEAR' sentinel in the DOM despite the code comment mentioning it — the sentinel lives in the pendingRally React state only."
+}

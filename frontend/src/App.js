@@ -53,6 +53,24 @@ function App() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  // Rally-point staging. Mirrors the movement-order tone: pick a
+  // target → preview a ghost marker on the map → commit with a Set
+  // button. Keyed by starfleet id; value is the pending system id
+  // (or the sentinel string 'CLEAR' for "no rally").
+  const [pendingRally, setPendingRally] = useState({}); // { sf_id: sys_id | 'CLEAR' }
+
+  // Full Replay viewer state. Fetched on demand from /api/game/{id}/replay
+  // when the player clicks "View Full Replay" on the game-over screen.
+  const [replayData, setReplayData] = useState(null);
+  const [replayTurnIdx, setReplayTurnIdx] = useState(0);
+  const [replayPlaying, setReplayPlaying] = useState(false);
+  const replayTimerRef = useRef(null);
+
+  // Combat report navigator state: which turn is the player scrubbed to.
+  // Defaults to "latest" (all turns collapsed) but flips to a single-turn
+  // focus once the player uses the ⏮ ⏯ ⏭ controls.
+  const [combatFocusTurn, setCombatFocusTurn] = useState(null); // null = all turns
+
   // Auto-fill join form from URL params on first mount
   useEffect(() => {
     const { game, name } = readUrlParams();
@@ -126,6 +144,32 @@ function App() {
       }
     };
   }, [gameState?.turn_deadline, gameState?.phase, gameState?.turn, gameState?.turn_paused, gameState?.turn_paused_remaining, availablePlayers, currentPlayer]);
+
+  // Replay auto-play tick. Advances one snapshot every 1.6s while
+  // replayPlaying is true; stops (and auto-pauses) at the last frame.
+  useEffect(() => {
+    if (replayTimerRef.current) {
+      clearInterval(replayTimerRef.current);
+      replayTimerRef.current = null;
+    }
+    if (!replayData || !replayPlaying) return undefined;
+    replayTimerRef.current = setInterval(() => {
+      setReplayTurnIdx(prev => {
+        const last = (replayData.snapshots?.length || 1) - 1;
+        if (prev >= last) {
+          setReplayPlaying(false);
+          return last;
+        }
+        return prev + 1;
+      });
+    }, 1600);
+    return () => {
+      if (replayTimerRef.current) {
+        clearInterval(replayTimerRef.current);
+        replayTimerRef.current = null;
+      }
+    };
+  }, [replayData, replayPlaying]);
 
   // Create a new game
   const createGame = async () => {
@@ -318,6 +362,41 @@ function App() {
     setLandingMode('create');
     setError(null);
     autoResolveFiredRef.current = {};
+    setPendingRally({});
+    setReplayData(null);
+    setReplayTurnIdx(0);
+    setReplayPlaying(false);
+    if (replayTimerRef.current) {
+      clearInterval(replayTimerRef.current);
+      replayTimerRef.current = null;
+    }
+    setCombatFocusTurn(null);
+  };
+
+  // Fetch the full replay (turn-by-turn snapshots) from the backend
+  // and open the viewer. Called from the game-over screen. Snapshots
+  // are FoW-off by design — the game is over, so nothing to hide.
+  const openReplay = async () => {
+    if (!currentGame) return;
+    try {
+      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/replay`);
+      if (!resp.ok) throw new Error('Failed to load replay');
+      const data = await resp.json();
+      setReplayData(data);
+      setReplayTurnIdx(0);
+      setReplayPlaying(false);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const closeReplay = () => {
+    setReplayData(null);
+    setReplayPlaying(false);
+    if (replayTimerRef.current) {
+      clearInterval(replayTimerRef.current);
+      replayTimerRef.current = null;
+    }
   };
 
   // Load game state with player-specific data
@@ -1221,19 +1300,24 @@ function App() {
             </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3">
-            <button 
-              onClick={isIndividualBuild ? cancelBuildOrder : cancelOrderSubmission}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
+          {/* Action Buttons — Cancel is the primary path since
+              proceeding risks destroying the player's own fleets;
+              "Proceed Anyway" is intentionally subdued and small so
+              it can't be muscle-memory-clicked. */}
+          <div className="flex justify-between items-center mt-2">
+            <button
+              onClick={isIndividualBuild ? confirmBuildOrder : confirmOrderSubmission}
+              className="proceed-anyway-btn"
+              data-testid="warning-proceed-anyway-btn"
             >
-              Cancel
+              Proceed anyway
             </button>
             <button 
-              onClick={isIndividualBuild ? confirmBuildOrder : confirmOrderSubmission}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500"
+              onClick={isIndividualBuild ? cancelBuildOrder : cancelOrderSubmission}
+              className="px-5 py-2 bg-blue-600 text-white rounded font-semibold hover:bg-blue-500"
+              data-testid="warning-cancel-btn"
             >
-              Proceed Anyway
+              Cancel — Rebalance Orders
             </button>
           </div>
         </div>
@@ -1710,18 +1794,38 @@ function App() {
     // visibility, we scope by owner defensively so a shared-sight /
     // spectator view can never leak someone else's retreat plan.
     // Each entry: { fleet, src (fleet's system), dst (rally system) }.
+    // We also compute a parallel "ghost" list from `pendingRally` so
+    // the player sees where they'll rally BEFORE they click Set.
     const rallyLinks = [];
+    const ghostRallyLinks = [];
     systems.forEach(sys => {
       (sys.starfleet_details || []).forEach(sf => {
-        if (sf.owner !== currentPlayer || !sf.rally_point) return;
-        const dst = gameState.systems[sf.rally_point];
-        if (!dst || dst.id === sys.id) return; // no self-links
-        rallyLinks.push({ fleet: sf, src: sys, dst });
+        if (sf.owner !== currentPlayer) return;
+        // Committed rally
+        if (sf.rally_point) {
+          const dst = gameState.systems[sf.rally_point];
+          if (dst && dst.id !== sys.id) {
+            rallyLinks.push({ fleet: sf, src: sys, dst });
+          }
+        }
+        // Pending rally (may differ from committed)
+        const raw = pendingRally[sf.id];
+        if (raw !== undefined) {
+          const pendingTarget = raw === 'CLEAR' ? '' : raw;
+          const currentTarget = sf.rally_point || '';
+          if (pendingTarget !== currentTarget && pendingTarget) {
+            const dst = gameState.systems[pendingTarget];
+            if (dst && dst.id !== sys.id) {
+              ghostRallyLinks.push({ fleet: sf, src: sys, dst });
+            }
+          }
+        }
       });
     });
     // De-duplicate the "R" marker: if a player has multiple fleets
     // rallying to the same system we still only draw one flag on it.
     const rallySystemIds = new Set(rallyLinks.map(l => l.dst.id));
+    const ghostRallySystemIds = new Set(ghostRallyLinks.map(l => l.dst.id));
     
     return (
       <div className="galaxy-container">
@@ -1832,6 +1936,64 @@ function App() {
                     fontSize="6"
                     fontWeight="bold"
                     fill="#0f0f23"
+                  >
+                    R
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Ghost rally overlay — pending selections not yet
+                committed. Rendered translucent + with a dashed banner
+                outline so it's clearly distinguishable from a real
+                (committed) rally flag on the same map. */}
+            {ghostRallyLinks.map(({ fleet, src, dst }, idx) => {
+              const color = getPlayerColor(currentPlayer);
+              const dx = dst.x - src.x;
+              const dy = dst.y - src.y;
+              const len = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+              const shrink = 10;
+              const tx = dst.x - (dx / len) * shrink;
+              const ty = dst.y - (dy / len) * shrink;
+              const sx = src.x + (dx / len) * shrink;
+              const sy = src.y + (dy / len) * shrink;
+              return (
+                <line
+                  key={`ghost-rally-line-${fleet.id}-${idx}`}
+                  x1={sx}
+                  y1={sy}
+                  x2={tx}
+                  y2={ty}
+                  stroke={color}
+                  strokeWidth="1"
+                  strokeDasharray="1 3"
+                  opacity="0.3"
+                  pointerEvents="none"
+                />
+              );
+            })}
+            {Array.from(ghostRallySystemIds).map(sid => {
+              const sys = gameState.systems[sid];
+              if (!sys) return null;
+              const color = getPlayerColor(currentPlayer);
+              const fx = sys.x + 14;
+              const fy = sys.y - 4;
+              return (
+                <g key={`ghost-rally-flag-${sid}`} pointerEvents="none" opacity="0.45" data-testid={`ghost-rally-flag-${sid}`}>
+                  <line x1={fx} y1={fy + 8} x2={fx} y2={fy - 8} stroke={color} strokeWidth="1" strokeDasharray="2 2" />
+                  <polygon
+                    points={`${fx},${fy - 8} ${fx + 8},${fy - 5} ${fx},${fy - 2}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="1"
+                    strokeDasharray="1.5 1"
+                  />
+                  <text
+                    x={fx + 3}
+                    y={fy - 4}
+                    fontSize="6"
+                    fontWeight="bold"
+                    fill={color}
                   >
                     R
                   </text>
@@ -2045,29 +2207,78 @@ function App() {
                         <strong>Pending:</strong> {starfleetOrders[starfleet.id].order_type}
                       </p>
                     )}
-                    {ownedByMe && (
-                      <div
-                        style={{ marginTop: 8 }}
-                        onClick={(e) => e.stopPropagation()}
-                        data-testid={`rally-row-${starfleet.id}`}
-                      >
-                        <label style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>
-                          Rally point (on retreat)
-                        </label>
-                        <select
-                          value={starfleet.rally_point || ''}
-                          onChange={(e) => setStarfleetRally(starfleet.id, e.target.value || null)}
-                          className="player-name-input"
-                          style={{ marginTop: 4, fontSize: 12 }}
-                          data-testid={`rally-select-${starfleet.id}`}
+                    {ownedByMe && (() => {
+                      // Staged rally selection. Matches the movement
+                      // UX tone: pick a target, see a ghost preview
+                      // on the map, commit with a Set button (or
+                      // reset back to the currently-saved value).
+                      const committed = starfleet.rally_point || '';
+                      const raw = pendingRally[starfleet.id];
+                      // Normalize 'CLEAR' -> '' so both dropdown value
+                      // and diff-check share the same domain.
+                      const staged = raw === undefined ? committed : (raw === 'CLEAR' ? '' : raw);
+                      const isDirty = staged !== committed;
+                      const commit = () => {
+                        const next = staged === '' ? null : staged;
+                        setPendingRally(prev => {
+                          const copy = { ...prev };
+                          delete copy[starfleet.id];
+                          return copy;
+                        });
+                        setStarfleetRally(starfleet.id, next);
+                      };
+                      const reset = () => {
+                        setPendingRally(prev => {
+                          const copy = { ...prev };
+                          delete copy[starfleet.id];
+                          return copy;
+                        });
+                      };
+                      return (
+                        <div
+                          style={{ marginTop: 8 }}
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`rally-row-${starfleet.id}`}
                         >
-                          <option value="">— None (stay put) —</option>
-                          {ownedSystems.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                          <label style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>
+                            Rally point (on retreat)
+                          </label>
+                          <select
+                            value={staged}
+                            onChange={(e) => setPendingRally(prev => ({
+                              ...prev,
+                              [starfleet.id]: e.target.value === '' ? 'CLEAR' : e.target.value,
+                            }))}
+                            className="player-name-input"
+                            style={{ marginTop: 4, fontSize: 12 }}
+                            data-testid={`rally-select-${starfleet.id}`}
+                          >
+                            <option value="">— None (stay put) —</option>
+                            {ownedSystems.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                          {isDirty && (
+                            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                              <button
+                                onClick={commit}
+                                className="rally-set-btn"
+                                data-testid={`rally-set-${starfleet.id}`}
+                              >
+                                Set Rally
+                              </button>
+                              <button
+                                onClick={reset}
+                                className="rally-reset-btn"
+                                data-testid={`rally-reset-${starfleet.id}`}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -2155,15 +2366,53 @@ function App() {
       }
     };
     
+    // Turn list used by the combat-playback navigator. All turns
+    // 1..currentTurn are always available, even if the player had no
+    // combats that turn — playing back the timeline should include
+    // the quiet turns.
+    const allTurns = Object.keys(reportsByTurn).map(Number).sort((a, b) => a - b);
+    const focusedTurn = combatFocusTurn && allTurns.includes(combatFocusTurn) ? combatFocusTurn : null;
+    const stepFocus = (delta) => {
+      const start = focusedTurn ?? currentTurn;
+      const idx = allTurns.indexOf(start);
+      const nextIdx = Math.max(0, Math.min(allTurns.length - 1, idx + delta));
+      const next = allTurns[nextIdx];
+      setCombatFocusTurn(next);
+      // Ensure the focused turn is expanded and marked seen.
+      setCombatReportsExpanded(prev => ({ ...prev, [next]: true }));
+      setSeenCombatTurns(prev => new Set([...prev, next]));
+    };
+    const clearFocus = () => setCombatFocusTurn(null);
+
     return (
       <div className="combat-reports-panel">
         <h4>Combat Reports</h4>
+
+        {/* Playback navigator — jump one turn at a time so a player
+            can re-live the game's fights in order. When "focused"
+            on a specific turn, only that turn's reports render below.
+            Clicking "All Turns" un-focuses and shows the full list. */}
+        <div className="combat-playback" data-testid="combat-playback">
+          <button onClick={() => stepFocus(-1)} className="combat-playback-btn"
+            data-testid="combat-playback-prev-btn" title="Previous turn">⏮</button>
+          <div className="combat-playback-label" data-testid="combat-playback-label">
+            {focusedTurn ? `Turn ${focusedTurn}` : 'All Turns'}
+          </div>
+          <button onClick={() => stepFocus(1)} className="combat-playback-btn"
+            data-testid="combat-playback-next-btn" title="Next turn">⏭</button>
+          {focusedTurn && (
+            <button onClick={clearFocus} className="combat-playback-all-btn"
+              data-testid="combat-playback-all-btn" title="Show all turns">All</button>
+          )}
+        </div>
+
         {Object.entries(reportsByTurn)
+          .filter(([turn]) => !focusedTurn || Number(turn) === focusedTurn)
           .sort(([a], [b]) => Number(b) - Number(a)) // Newest first
           .map(([turn, reports]) => {
             const isCurrentTurn = Number(turn) === currentTurn;
             const isSeen = seenCombatTurns.has(turn);
-            const isExpanded = combatReportsExpanded[turn] !== false && (isCurrentTurn || !isSeen);
+            const isExpanded = combatReportsExpanded[turn] !== false && (isCurrentTurn || !isSeen || focusedTurn === Number(turn));
             
             return (
               <div key={turn} className="combat-turn-section">
@@ -2257,17 +2506,19 @@ function App() {
     );
   };
 
-  // Render victory status.
+  // Render the game-over screen.
   //
-  // Two states:
-  //   1. `game_over: true` — the engine has confirmed a winner and
-  //      locked further mutation. We render a full-screen modal that
-  //      blocks the rest of the UI and offers a "Return to Home"
-  //      button so players can start/join a new game.
-  //   2. `victory_status: { winner, ... }` but not yet locked — a
-  //      transient "you just crossed the threshold" banner while a
-  //      resolve is in flight. Kept as an inline panel so it doesn't
-  //      block the map mid-turn.
+  // Layout per user spec:
+  //   1. Header: winner name + win condition label
+  //   2. Score card: per-player stats (systems / fleets / upgrades)
+  //   3. Action buttons for game-specific info (Full Replay)
+  //   4. Subdued "Return to Home Screen" button at the very bottom,
+  //      styled small + muted so it can't be accidentally clicked
+  //      when reaching for the primary game-info actions above.
+  //
+  // Also handles the transient pre-lock banner branch (kept for the
+  // brief window between check_victory returning a winner and the
+  // engine locking in the same resolve_turn).
   const renderVictoryStatus = () => {
     if (!gameState) return null;
     const gameOver = gameState.game_over;
@@ -2276,51 +2527,246 @@ function App() {
 
     const winnerName = getPlayerName(victory.winner);
     const winnerColor = getPlayerColor(victory.winner);
+    const conditionLabel = victory.condition_label ||
+      (victory.condition === 'standard' ? 'Standard Victory' : 'Victory');
 
-    if (gameOver) {
+    if (!gameOver) {
       return (
-        <div className="game-over-overlay" data-testid="game-over-overlay" role="dialog" aria-modal="true">
-          <div className="game-over-modal">
-            <div className="game-over-header">
-              <h1 style={{ color: winnerColor }}>Victory</h1>
-              <div className="game-over-subtitle">The galaxy has a new ruler</div>
-            </div>
-            <div className="game-over-body">
-              <p className="game-over-winner">
-                <strong style={{ color: winnerColor }}>{winnerName}</strong> wins by
-                controlling more than half the galaxy.
-              </p>
-              <ul className="game-over-stats">
-                <li>Systems controlled: <strong>{victory.systems_controlled}</strong> / {victory.total_systems}</li>
-                <li>Threshold: {victory.required_systems}</li>
-                {victory.final_turn && (<li>Final turn: {victory.final_turn}</li>)}
-              </ul>
-            </div>
-            <div className="game-over-actions">
-              <button
-                onClick={returnToHome}
-                className="game-over-home-btn"
-                data-testid="game-over-return-home-btn"
-              >
-                Return to Home
-              </button>
-            </div>
+        <div className="victory-panel" data-testid="victory-banner">
+          <div className="victory-header">
+            <h2>VICTORY!</h2>
+          </div>
+          <div className="victory-details">
+            <p><strong>{winnerName}</strong> has conquered the galaxy!</p>
+            <p>Systems controlled: {victory.systems_controlled}/{victory.total_systems}</p>
+            <p>Required for victory: {victory.required_systems}</p>
           </div>
         </div>
       );
     }
 
-    // Transient banner (pre-lock; usually only visible for milliseconds
-    // during the resolve pipeline, but preserved for backward compat.)
+    const scoreCard = victory.score_card || [];
+    const sortedScore = [...scoreCard].sort((a, b) => {
+      if (a.player_id === victory.winner) return -1;
+      if (b.player_id === victory.winner) return 1;
+      return (b.systems || 0) - (a.systems || 0);
+    });
+
     return (
-      <div className="victory-panel" data-testid="victory-banner">
-        <div className="victory-header">
-          <h2>VICTORY!</h2>
+      <div className="game-over-overlay" data-testid="game-over-overlay" role="dialog" aria-modal="true">
+        <div className="game-over-modal">
+          {/* 1. Winner header */}
+          <div className="game-over-header">
+            <div className="game-over-eyebrow">Game Over · Turn {victory.final_turn}</div>
+            <h1 style={{ color: winnerColor }} data-testid="game-over-winner-name">
+              {winnerName} Wins
+            </h1>
+            <div className="game-over-condition" data-testid="game-over-condition">
+              {conditionLabel}
+            </div>
+          </div>
+
+          {/* 2. Score card */}
+          <div className="game-over-scorecard" data-testid="game-over-scorecard">
+            <div className="scorecard-header">
+              <span>Player</span>
+              <span title="Systems controlled">Systems</span>
+              <span title="Starfleets remaining">Fleets</span>
+              <span title="System upgrades built">Upgrades</span>
+              <span title="Tech · Metals · CHON">Resources</span>
+            </div>
+            {sortedScore.map(row => {
+              const isWinner = row.player_id === victory.winner;
+              const name = getPlayerName(row.player_id);
+              const color = getPlayerColor(row.player_id);
+              const res = row.resources || {};
+              return (
+                <div
+                  key={row.player_id}
+                  className={`scorecard-row ${isWinner ? 'scorecard-row-winner' : ''}`}
+                  data-testid={`scorecard-row-${row.player_id}`}
+                >
+                  <span className="scorecard-name" style={{ color }}>
+                    {isWinner && <span className="winner-mark" aria-hidden="true">★</span>}
+                    {name}
+                  </span>
+                  <span>{row.systems || 0}</span>
+                  <span>{row.starfleets || 0}</span>
+                  <span>{row.upgrades || 0}</span>
+                  <span className="scorecard-res">
+                    <span>T {res.tech ?? 0}</span>
+                    <span>M {res.metals ?? 0}</span>
+                    <span>C {res.chon ?? 0}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 3. Game-info action buttons */}
+          <div className="game-over-actions-primary">
+            <button
+              onClick={openReplay}
+              className="game-over-action-btn"
+              data-testid="game-over-view-replay-btn"
+            >
+              View Full Replay
+            </button>
+          </div>
+
+          {/* 4. Subdued exit — kept small + muted + separated so it's
+              not the button you accidentally reach for while reading
+              the score card. */}
+          <div className="game-over-exit">
+            <button
+              onClick={returnToHome}
+              className="game-over-exit-btn"
+              data-testid="game-over-return-home-btn"
+            >
+              Return to Home Screen
+            </button>
+          </div>
         </div>
-        <div className="victory-details">
-          <p><strong>{winnerName}</strong> has conquered the galaxy!</p>
-          <p>Systems controlled: {victory.systems_controlled}/{victory.total_systems}</p>
-          <p>Required for victory: {victory.required_systems}</p>
+      </div>
+    );
+  };
+
+  // Full Replay viewer. Opens over the game-over screen; renders the
+  // whole map at the currently-scrubbed turn snapshot (FoW-off), with
+  // transport controls: ⏮ / ⏯ (play/pause) / ⏭ / turn slider.
+  const renderReplayViewer = () => {
+    if (!replayData) return null;
+    const snapshots = replayData.snapshots || [];
+    if (snapshots.length === 0) {
+      return (
+        <div className="replay-overlay" data-testid="replay-overlay">
+          <div className="replay-shell">
+            <div className="replay-empty">No turns recorded yet.</div>
+            <button onClick={closeReplay} data-testid="replay-close-btn">Close</button>
+          </div>
+        </div>
+      );
+    }
+    const idx = Math.min(replayTurnIdx, snapshots.length - 1);
+    const frame = snapshots[idx];
+    const playerMeta = replayData.players || [];
+    const nameFor = pid => (playerMeta.find(p => p.id === pid)?.name) || (pid ? pid.slice(0, 6) : '—');
+    const systemsList = Object.values(frame.systems || {});
+    // Compute a fleet-count map per system for tiny fleet dots (we
+    // stored starfleet_ids on each system in the snapshot).
+    const combats = frame.combat_reports || [];
+
+    const step = (delta) => {
+      setReplayPlaying(false);
+      setReplayTurnIdx(prev => {
+        const next = Math.max(0, Math.min(snapshots.length - 1, prev + delta));
+        return next;
+      });
+    };
+    const togglePlay = () => {
+      if (idx >= snapshots.length - 1) setReplayTurnIdx(0);
+      setReplayPlaying(p => !p);
+    };
+
+    return (
+      <div className="replay-overlay" data-testid="replay-overlay" role="dialog" aria-modal="true">
+        <div className="replay-shell">
+          <div className="replay-header">
+            <div className="replay-title">Full Replay <span className="replay-fow-tag">FoW off</span></div>
+            <button onClick={closeReplay} className="replay-close" data-testid="replay-close-btn">✕</button>
+          </div>
+
+          <div className="replay-map-wrap">
+            <svg viewBox="0 0 800 600" className="replay-map" preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <radialGradient id="replaySpaceGradient" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#1a202c" />
+                  <stop offset="100%" stopColor="#0f0f23" />
+                </radialGradient>
+              </defs>
+              <rect width="800" height="600" fill="url(#replaySpaceGradient)" />
+              {/* Connections */}
+              {systemsList.map(sys => (sys.connections || []).map(cid => {
+                const c = frame.systems[cid];
+                if (!c) return null;
+                const [a, b] = [sys.id, cid].sort();
+                return (
+                  <line key={`rc-${a}-${b}`} x1={sys.x} y1={sys.y} x2={c.x} y2={c.y}
+                    stroke="#4a5568" strokeWidth="1" opacity="0.6" />
+                );
+              }))}
+              {/* Combat sparks — small red rings on systems that saw combat this turn */}
+              {combats.map((cr, i) => {
+                const sys = systemsList.find(s => s.name === cr.system);
+                if (!sys) return null;
+                return (
+                  <circle key={`rcs-${i}`} cx={sys.x} cy={sys.y} r="16"
+                    fill="none" stroke="#ef4444" strokeWidth="1.5" opacity="0.7" strokeDasharray="3 2" />
+                );
+              })}
+              {/* Systems */}
+              {systemsList.map(sys => {
+                const r = sys.is_home_system ? 12 : 8;
+                const fill = sys.owner ? getPlayerColor(sys.owner) : '#334155';
+                const fleetCount = (sys.starfleet_ids || []).length;
+                return (
+                  <g key={`rs-${sys.id}`}>
+                    <circle cx={sys.x} cy={sys.y} r={r} fill={fill} stroke="#ffffff" strokeWidth={sys.is_home_system ? 2 : 1} />
+                    <text x={sys.x} y={sys.y - 18} fill="#ffffff" fontSize="10" textAnchor="middle">{sys.name}</text>
+                    {fleetCount > 0 && (
+                      <>
+                        <circle cx={sys.x + 12} cy={sys.y - 10} r="6" fill="#0f172a" stroke={fill} strokeWidth="1" />
+                        <text x={sys.x + 12} y={sys.y - 7} fill="#e2e8f0" fontSize="8" textAnchor="middle" fontWeight="bold">{fleetCount}</text>
+                      </>
+                    )}
+                    {(sys.upgrades || []).length > 0 && (
+                      <text x={sys.x} y={sys.y + 22} fill="#94a3b8" fontSize="7" textAnchor="middle">
+                        {sys.upgrades.map(u => u[0].toUpperCase()).join('')}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+
+          <div className="replay-controls" data-testid="replay-controls">
+            <button onClick={() => step(-1)} disabled={idx === 0}
+              className="replay-btn" data-testid="replay-prev-btn" aria-label="Previous turn">⏮</button>
+            <button onClick={togglePlay} className="replay-btn replay-play"
+              data-testid="replay-play-btn" aria-label={replayPlaying ? 'Pause' : 'Play'}>
+              {replayPlaying ? '⏸' : '▶'}
+            </button>
+            <button onClick={() => step(1)} disabled={idx >= snapshots.length - 1}
+              className="replay-btn" data-testid="replay-next-btn" aria-label="Next turn">⏭</button>
+            <input
+              type="range"
+              min="0"
+              max={snapshots.length - 1}
+              value={idx}
+              onChange={(e) => { setReplayPlaying(false); setReplayTurnIdx(Number(e.target.value)); }}
+              className="replay-scrubber"
+              data-testid="replay-scrubber"
+            />
+            <div className="replay-turn-label" data-testid="replay-turn-label">
+              Turn {frame.turn} <span className="replay-turn-of">of {snapshots[snapshots.length - 1].turn}</span>
+            </div>
+          </div>
+
+          {combats.length > 0 && (
+            <div className="replay-combat-list" data-testid="replay-combat-list">
+              <div className="replay-combat-header">Combats this turn</div>
+              {combats.map((cr, i) => (
+                <div key={`rcl-${i}`} className="replay-combat-row">
+                  <span className="replay-combat-sys">{cr.system}</span>
+                  <span className={`replay-combat-outcome outcome-${cr.outcome}`}>{cr.outcome}</span>
+                  <span className="replay-combat-winner">
+                    {cr.winner ? nameFor(cr.winner) : (cr.contested_between ? 'contested' : '—')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2909,6 +3355,8 @@ function App() {
         <div className="game-main">
           {/* Victory overlay */}
           {renderVictoryStatus()}
+          {/* Full Replay viewer (over game-over) */}
+          {renderReplayViewer()}
           
           <div className="galaxy-section">
             {renderGalaxyMap()}
