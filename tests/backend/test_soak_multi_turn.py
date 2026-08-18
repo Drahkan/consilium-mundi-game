@@ -79,11 +79,22 @@ def test_multi_turn_soak_no_crashes_and_invariants_hold(capsys):
             f"turn {turn_num}: engine swallowed an internal exception -> {captured.out}"
         )
 
-        # --- Invariants that must hold regardless of future feature additions ---
-        assert engine.current_turn == prev_turn + 1, (
-            f"turn {turn_num}: expected exactly one turn advance"
-        )
-        prev_turn = engine.current_turn
+        # If a victory locked the game this turn, `resolve_turn` deliberately
+        # does NOT advance the turn counter (the state players see is the
+        # state that produced the win). The soak run stops here — we still
+        # check invariants below on the frozen final state.
+        if engine.game_over:
+            assert engine.final_victory is not None
+            assert engine.final_victory["winner"] in player_ids
+            assert engine.current_turn == prev_turn, (
+                "victory lock must NOT advance the turn counter"
+            )
+        else:
+            # --- Invariants that must hold regardless of future feature additions ---
+            assert engine.current_turn == prev_turn + 1, (
+                f"turn {turn_num}: expected exactly one turn advance"
+            )
+            prev_turn = engine.current_turn
 
         assert engine.ready_players == set(), "ready set must clear after auto-resolve"
 
@@ -120,3 +131,8 @@ def test_multi_turn_soak_no_crashes_and_invariants_hold(capsys):
                     assert sys_data["name"] == "???"
                     assert sys_data["owner"] is None
                     assert sys_data["starfleet_details"] == []
+
+        # If we hit a real end-of-game this turn, stop the soak — further
+        # /orders and /ready calls would be 409'd by the victory lock.
+        if engine.game_over:
+            break

@@ -90,7 +90,7 @@ function App() {
   // resolve-turn endpoint. Ref guard ensures we only fire once per turn.
   useEffect(() => {
     if (timerTickRef.current) clearInterval(timerTickRef.current);
-    if (!gameState || gameState.phase !== 'activity') {
+    if (!gameState || gameState.phase !== 'activity' || gameState.game_over) {
       setSecondsRemaining(null);
       return undefined;
     }
@@ -285,6 +285,39 @@ function App() {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  // Reset everything back to the landing (create/join) screen. Used by
+  // the game-over screen so a player can start or join a fresh game
+  // without a full browser refresh. Also strips ?game=<id> from the
+  // URL so the old lobby link doesn't re-hydrate on mount.
+  const returnToHome = () => {
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch (e) { /* ignore */ }
+    setGameState(null);
+    setCurrentGame(null);
+    setCurrentPlayer(null);
+    setAvailablePlayers([]);
+    setSelectedSystem(null);
+    setSelectedStarfleet(null);
+    setStarfleetOrders({});
+    setBuildOrders({});
+    setPlayerBuildOrders({});
+    setShowBuildPanel(false);
+    setShowCombatReports(false);
+    setCombatReportsExpanded({});
+    setSeenCombatTurns(new Set());
+    setShowOrderSummary(false);
+    setShowResourceWarning(false);
+    setWarningDetails(null);
+    setShowResourceImpact(false);
+    setJoinGameId('');
+    setLandingMode('create');
+    setError(null);
+    autoResolveFiredRef.current = {};
   };
 
   // Load game state with player-specific data
@@ -1671,6 +1704,24 @@ function App() {
       if (!src || !dst) return null;
       return { order, src, dst };
     }).filter(Boolean);
+
+    // Rally-point overlays. Only draw for the current player's own
+    // fleets — even though the API only returns rally_point on FULL
+    // visibility, we scope by owner defensively so a shared-sight /
+    // spectator view can never leak someone else's retreat plan.
+    // Each entry: { fleet, src (fleet's system), dst (rally system) }.
+    const rallyLinks = [];
+    systems.forEach(sys => {
+      (sys.starfleet_details || []).forEach(sf => {
+        if (sf.owner !== currentPlayer || !sf.rally_point) return;
+        const dst = gameState.systems[sf.rally_point];
+        if (!dst || dst.id === sys.id) return; // no self-links
+        rallyLinks.push({ fleet: sf, src: sys, dst });
+      });
+    });
+    // De-duplicate the "R" marker: if a player has multiple fleets
+    // rallying to the same system we still only draw one flag on it.
+    const rallySystemIds = new Set(rallyLinks.map(l => l.dst.id));
     
     return (
       <div className="galaxy-container">
@@ -1702,15 +1753,18 @@ function App() {
           
           {/* Main map group with zoom and pan transforms */}
           <g transform={`translate(${mapPan.x}, ${mapPan.y}) scale(${mapZoom})`}>
-            {/* Draw connections first */}
+            {/* Draw connections first. Key is normalized to the
+                sorted pair so mutual connections (A→B and B→A) don't
+                trigger React's duplicate-key warning. */}
             {systems.map(system => 
               system.connections.map(connId => {
                 const connSystem = gameState.systems[connId];
                 if (!connSystem) return null;
+                const [a, b] = [system.id, connId].sort();
                 
                 return (
                   <line
-                    key={`${system.id}-${connId}`}
+                    key={`conn-${a}-${b}`}
                     x1={system.x}
                     y1={system.y}
                     x2={connSystem.x}
@@ -1723,6 +1777,68 @@ function App() {
               })
             )}
             
+            {/* Rally-point overlay: thin dashed line from each of the
+                current player's fleets to its rally system, plus a
+                small "R" flag on the rally system. Rendered under the
+                move/support arrows and under the system nodes so it
+                never intercepts clicks. */}
+            {rallyLinks.map(({ fleet, src, dst }, idx) => {
+              const color = getPlayerColor(currentPlayer);
+              const dx = dst.x - src.x;
+              const dy = dst.y - src.y;
+              const len = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+              const shrink = 10;
+              const tx = dst.x - (dx / len) * shrink;
+              const ty = dst.y - (dy / len) * shrink;
+              const sx = src.x + (dx / len) * shrink;
+              const sy = src.y + (dy / len) * shrink;
+              return (
+                <line
+                  key={`rally-line-${fleet.id}-${idx}`}
+                  x1={sx}
+                  y1={sy}
+                  x2={tx}
+                  y2={ty}
+                  stroke={color}
+                  strokeWidth="1"
+                  strokeDasharray="2 4"
+                  opacity="0.55"
+                  pointerEvents="none"
+                />
+              );
+            })}
+            {Array.from(rallySystemIds).map(sid => {
+              const sys = gameState.systems[sid];
+              if (!sys) return null;
+              const color = getPlayerColor(currentPlayer);
+              // Offset the flag up-and-right so it doesn't collide
+              // with the resource label (below) or system name (above).
+              const fx = sys.x + 14;
+              const fy = sys.y - 4;
+              return (
+                <g key={`rally-flag-${sid}`} pointerEvents="none" data-testid={`rally-flag-${sid}`}>
+                  {/* Flag pole */}
+                  <line x1={fx} y1={fy + 8} x2={fx} y2={fy - 8} stroke={color} strokeWidth="1" />
+                  {/* Flag banner */}
+                  <polygon
+                    points={`${fx},${fy - 8} ${fx + 8},${fy - 5} ${fx},${fy - 2}`}
+                    fill={color}
+                    stroke="#0f0f23"
+                    strokeWidth="0.5"
+                  />
+                  <text
+                    x={fx + 3}
+                    y={fy - 4}
+                    fontSize="6"
+                    fontWeight="bold"
+                    fill="#0f0f23"
+                  >
+                    R
+                  </text>
+                </g>
+              );
+            })}
+
             {/* Pending order overlay (movement/support arrows for current player) */}
             {pendingOrderArrows.map(({ order, src, dst }, idx) => {
               const isSupport = order.order_type === 'support';
@@ -2141,17 +2257,65 @@ function App() {
     );
   };
 
-  // Render victory status
+  // Render victory status.
+  //
+  // Two states:
+  //   1. `game_over: true` — the engine has confirmed a winner and
+  //      locked further mutation. We render a full-screen modal that
+  //      blocks the rest of the UI and offers a "Return to Home"
+  //      button so players can start/join a new game.
+  //   2. `victory_status: { winner, ... }` but not yet locked — a
+  //      transient "you just crossed the threshold" banner while a
+  //      resolve is in flight. Kept as an inline panel so it doesn't
+  //      block the map mid-turn.
   const renderVictoryStatus = () => {
-    if (!gameState || !gameState.victory_status) return null;
-    
-    const victory = gameState.victory_status;
+    if (!gameState) return null;
+    const gameOver = gameState.game_over;
+    const victory = gameState.final_victory || gameState.victory_status;
+    if (!victory) return null;
+
     const winnerName = getPlayerName(victory.winner);
-    
+    const winnerColor = getPlayerColor(victory.winner);
+
+    if (gameOver) {
+      return (
+        <div className="game-over-overlay" data-testid="game-over-overlay" role="dialog" aria-modal="true">
+          <div className="game-over-modal">
+            <div className="game-over-header">
+              <h1 style={{ color: winnerColor }}>Victory</h1>
+              <div className="game-over-subtitle">The galaxy has a new ruler</div>
+            </div>
+            <div className="game-over-body">
+              <p className="game-over-winner">
+                <strong style={{ color: winnerColor }}>{winnerName}</strong> wins by
+                controlling more than half the galaxy.
+              </p>
+              <ul className="game-over-stats">
+                <li>Systems controlled: <strong>{victory.systems_controlled}</strong> / {victory.total_systems}</li>
+                <li>Threshold: {victory.required_systems}</li>
+                {victory.final_turn && (<li>Final turn: {victory.final_turn}</li>)}
+              </ul>
+            </div>
+            <div className="game-over-actions">
+              <button
+                onClick={returnToHome}
+                className="game-over-home-btn"
+                data-testid="game-over-return-home-btn"
+              >
+                Return to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Transient banner (pre-lock; usually only visible for milliseconds
+    // during the resolve pipeline, but preserved for backward compat.)
     return (
-      <div className="victory-panel">
+      <div className="victory-panel" data-testid="victory-banner">
         <div className="victory-header">
-          <h2>🏆 VICTORY! 🏆</h2>
+          <h2>VICTORY!</h2>
         </div>
         <div className="victory-details">
           <p><strong>{winnerName}</strong> has conquered the galaxy!</p>

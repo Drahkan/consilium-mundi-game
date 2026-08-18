@@ -8,6 +8,12 @@ import random
 import math
 from datetime import datetime, timedelta, timezone
 import json
+from dotenv import load_dotenv
+
+# Load /app/backend/.env so runtime flags like EXPOSE_TEST_ENDPOINTS
+# (and MONGO_URL / DB_NAME if persistence is enabled) are visible to
+# os.environ. Supervisor does not source .env files by default.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 app = FastAPI()
 
@@ -102,6 +108,14 @@ class GameEngine:
         # Kept as a top-level dict so upgrade code can just mutate this
         # without touching the visibility computation.
         self.extended_sight = {}  # player_id -> set(system_id)
+        # Victory lock. Once a victory condition is confirmed at the end
+        # of a resolve_turn, we freeze a snapshot of the final state and
+        # refuse to advance further. All order-taking endpoints must
+        # short-circuit on this flag, and resolve_turn itself becomes a
+        # no-op. `final_victory` is the frozen payload shown on the
+        # game-over screen.
+        self.game_over = False
+        self.final_victory = None
         
     def generate_galaxy(self):
         """Generate a balanced galaxy map with guaranteed connectivity"""
@@ -386,6 +400,12 @@ class GameEngine:
         """Execute the full turn resolution according to Consilium Mundi rules"""
         if self.phase != "activity":
             return
+        # Victory lock: once someone has won, the game is frozen and no
+        # further turns are resolved. Endpoints also guard this, but the
+        # engine itself must refuse too so nothing (auto-resolve, cron,
+        # tests) can accidentally advance past the end.
+        if self.game_over:
+            return
         
         try:
             # Auto-submit any pending orders for players who haven't finalized
@@ -402,6 +422,26 @@ class GameEngine:
             
             # Phase 4: Build Phase
             self.build_phase()
+            
+            # Victory check — done after all phases so a build/combat that
+            # tipped a player over 50% control is caught the same turn.
+            # If someone has won we freeze the game right here: no turn
+            # bump, no new deadline, no cleared orders — the state the
+            # players see is the state that produced the win.
+            victory = self.check_victory_condition()
+            if victory:
+                self.game_over = True
+                self.final_victory = {
+                    **victory,
+                    "final_turn": self.current_turn,
+                }
+                # Freeze the timer so the frontend doesn't keep counting
+                # against a game that will never resolve another turn.
+                self.turn_deadline = None
+                self.turn_paused = False
+                self.turn_paused_remaining = 0
+                self.ready_players = set()
+                return
             
             # Advance turn
             self.current_turn += 1
@@ -539,13 +579,31 @@ class GameEngine:
                     movements[target_system] = []
                 movements[target_system].append(starfleet)
         
-        # Resolve each system with incoming movements
+        # Resolve each system with incoming movements.
+        #
+        # A fleet's move order can be voided mid-phase — if the fleet's
+        # home system is under attack and that combat resolves first,
+        # the fleet is destroyed as a defender before its own move can
+        # be applied. `resolve_system_combat` guards against operating
+        # on any starfleet that isn't in `self.starfleets` at the time
+        # its combat runs, so a moving fleet that got destroyed at home
+        # is silently dropped from its target system's incoming list.
         for system_id, incoming_starfleets in movements.items():
             self.resolve_system_combat(system_id, incoming_starfleets)
     
     def resolve_system_combat(self, system_id: str, incoming_starfleets: List[Starfleet]):
         """Resolve combat in a specific system with support mechanics"""
         target_system = self.systems[system_id]
+        # Drop any incoming fleet that was destroyed earlier this same
+        # resolution phase (its home system's combat ran first and it
+        # died as a defender). Those fleet objects are still Python
+        # objects but they're gone from `self.starfleets` — operating
+        # on them would resurrect them into `target_system.starfleets`
+        # or throw a KeyError trying to `del` them from a system they
+        # were already removed from.
+        incoming_starfleets = [
+            sf for sf in incoming_starfleets if sf.id in self.starfleets
+        ]
         defending_starfleets = list(target_system.starfleets.values())
         
         # Check if system is uncontrolled (no owner, no starfleets)
@@ -571,7 +629,8 @@ class GameEngine:
                     if starfleet.owner == strongest_attacker:
                         # Move starfleet to new system
                         old_system = self.systems[starfleet.system_id]
-                        del old_system.starfleets[starfleet.id]
+                        if starfleet.id in old_system.starfleets:
+                            del old_system.starfleets[starfleet.id]
                         
                         starfleet.system_id = system_id
                         target_system.starfleets[starfleet.id] = starfleet
@@ -707,7 +766,8 @@ class GameEngine:
             for starfleet in incoming_starfleets:
                 if starfleet.owner == strongest_attacker:
                     old_system = self.systems[starfleet.system_id]
-                    del old_system.starfleets[starfleet.id]
+                    if starfleet.id in old_system.starfleets:
+                        del old_system.starfleets[starfleet.id]
                     starfleet.system_id = system_id
                     target_system.starfleets[starfleet.id] = starfleet
                 else:
@@ -1158,6 +1218,8 @@ class GameEngine:
             "player_resources": self.player_resources.get(player_id) if player_id else self.player_resources,
             "combat_reports": getattr(self, 'combat_reports', []),
             "victory_status": self.check_victory_condition(),
+            "game_over": bool(getattr(self, 'game_over', False)),
+            "final_victory": getattr(self, 'final_victory', None),
             "config": {
                 "num_players": self.config.num_players,
                 "galaxy_size": self.config.galaxy_size,
@@ -1165,6 +1227,16 @@ class GameEngine:
                 "fow_mode": getattr(self.config, 'fow_mode', 'basic'),
             }
         }
+
+def _require_active_game(game):
+    """Raise 409 if the game has already ended via a victory lock.
+
+    Any endpoint that mutates game state should call this first so the
+    game truly stops on victory instead of drifting forward. Read-only
+    endpoints (state, join to spectate) intentionally do NOT call this.
+    """
+    if getattr(game, 'game_over', False):
+        raise HTTPException(status_code=409, detail="Game is over")
 
 @app.post("/api/create-game")
 async def create_game(request: CreateGameRequest):
@@ -1339,6 +1411,7 @@ async def submit_orders(game_id: str, orders_data: Dict[str, Any]):
         raise HTTPException(status_code=404, detail="Game not found")
     
     game = games[game_id]
+    _require_active_game(game)
     player_id = orders_data.get("player_id")
     orders = orders_data.get("orders", [])
     
@@ -1361,6 +1434,7 @@ async def submit_espionage_orders(game_id: str, espionage_data: Dict[str, Any]):
         raise HTTPException(status_code=404, detail="Game not found")
     
     game = games[game_id]
+    _require_active_game(game)
     player_id = espionage_data.get("player_id")
     orders = espionage_data.get("orders", [])
     
@@ -1377,6 +1451,7 @@ async def submit_build_orders(game_id: str, build_data: Dict[str, Any]):
         raise HTTPException(status_code=404, detail="Game not found")
     
     game = games[game_id]
+    _require_active_game(game)
     player_id = build_data.get("player_id")
     orders = build_data.get("orders", [])
     
@@ -1393,6 +1468,7 @@ async def resolve_turn(game_id: str):
         raise HTTPException(status_code=404, detail="Game not found")
     
     game = games[game_id]
+    _require_active_game(game)
     
     try:
         game.resolve_turn()
@@ -1409,6 +1485,7 @@ async def control_timer(game_id: str, payload: Dict[str, Any]):
     if game_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
     game = games[game_id]
+    _require_active_game(game)
     action = (payload or {}).get("action")
     if game.phase != "activity":
         raise HTTPException(status_code=400, detail="Timer only controllable during the activity phase")
@@ -1459,6 +1536,7 @@ async def set_ready(game_id: str, payload: Dict[str, Any]):
     if game_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
     game = games[game_id]
+    _require_active_game(game)
     player_id = (payload or {}).get("player_id")
     if not player_id or player_id not in game.players:
         raise HTTPException(status_code=400, detail="Unknown player_id for this game")
@@ -1503,6 +1581,7 @@ async def set_starfleet_rally(game_id: str, starfleet_id: str, payload: Dict[str
     if game_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
     game = games[game_id]
+    _require_active_game(game)
     sf = game.starfleets.get(starfleet_id)
     if not sf:
         raise HTTPException(status_code=404, detail="Starfleet not found")
@@ -1549,6 +1628,60 @@ async def list_games():
             for gid, game in games.items()
         ]
     }
+@app.post("/api/game/{game_id}/_test/force-victory")
+async def _test_force_victory(game_id: str):
+    """TEST-ONLY: force the game into a locked/game-over state.
+
+    Only mounted when EXPOSE_TEST_ENDPOINTS=1 is set in the environment
+    so production deploys never expose it. Used by the E2E test harness
+    to verify the victory-lock UI/flow without playing an entire game.
+    """
+    if os.environ.get("EXPOSE_TEST_ENDPOINTS") != "1":
+        raise HTTPException(status_code=404, detail="Not found")
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    if not game.players:
+        raise HTTPException(status_code=400, detail="No players")
+    game.game_over = True
+    game.final_victory = {
+        "winner": game.players[0],
+        "systems_controlled": 5,
+        "total_systems": 8,
+        "required_systems": 5,
+        "final_turn": getattr(game, "current_turn", 1),
+    }
+    game.turn_deadline = None
+    game.turn_paused = False
+    game.turn_paused_remaining = 0
+    game.ready_players = set()
+    return {"status": "locked", "final_victory": game.final_victory}
+
+
+@app.post("/api/game/{game_id}/_test/give-system")
+async def _test_give_system(game_id: str, payload: Dict[str, Any]):
+    """TEST-ONLY: reassign ownership of a system to a player.
+
+    Body: {"player_id": <str>, "system_id": <str>}
+    Only mounted when EXPOSE_TEST_ENDPOINTS=1 is set. Used by E2E tests
+    that need a scenario where a player owns a non-home system.
+    """
+    if os.environ.get("EXPOSE_TEST_ENDPOINTS") != "1":
+        raise HTTPException(status_code=404, detail="Not found")
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = games[game_id]
+    pid = (payload or {}).get("player_id")
+    sid = (payload or {}).get("system_id")
+    if pid not in game.players:
+        raise HTTPException(status_code=400, detail="Unknown player")
+    sys = game.systems.get(sid)
+    if not sys:
+        raise HTTPException(status_code=404, detail="System not found")
+    sys.owner = pid
+    return {"status": "ok", "system_id": sid, "owner": pid}
+
+
 
 @app.get("/")
 async def root():

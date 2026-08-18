@@ -15,13 +15,13 @@ Last updated: 2026-08 (post-demo-prep audit).
 | Resolution Phase (combat) | Implemented | `resolve_system_combat()` | Multi-party, tie-break, support-only attackers |
 | Trade Phase | **NOT implemented** (collapsed into Resolution/Build) | — | User decision 2026-08: keep collapsed for the demo |
 | Build Phase | Implemented | `build_phase()` / `execute_build_order()` | |
-| Victory: Standard (>50% systems) | Implemented | `check_victory_condition()` | Only mode wired to a game option |
+| Victory: Standard (>50% systems) | Implemented (locks game on win) | `check_victory_condition()`, `resolve_turn()` victory freeze, `game_over`/`final_victory` in state | Only mode wired to a game option so far |
 | Victory: Galactic Domination | **NOT implemented** | — | |
 | Victory: Last Civilization Standing | **NOT implemented** | — | |
 | Victory: Corporate Takeover | **NOT implemented** | — | |
 | Victory: Gunship Diplomacy | **NOT implemented** | — | |
-| Turn Limit end-condition | **NOT implemented** | — | No "no duration" vs. capped-turns option exists |
-| Game actually ends/locks on victory | **NOT implemented** | `victory_status` is a banner only | `resolve_turn()` keeps advancing turns after a win |
+| Turn Limit end-condition | **NOT implemented (design decision pending)** | — | Design doc mentions "Turn Duration" per-turn timer but not a max-turns rule. Auto-resolve on timer already handles AFK stalls, so this is a game-design call. |
+| Game actually ends/locks on victory | Implemented (Aug 2026) | `resolve_turn()` sets `game_over`/`final_victory`; `_require_active_game()` 409s all mutation endpoints; frontend renders a full-screen game-over modal with Return-to-Home | |
 | Player abandonment ("government collapsed") | **NOT implemented** | — | |
 | Fog of War (1-jump basic mode) | Implemented | `compute_visibility()` | |
 | Uncharted Territory / extended sight / scanner upgrade | Reserved, not wired | `extended_sight` dict exists but unused | Explicitly deferred by user, do not build yet |
@@ -33,6 +33,8 @@ Last updated: 2026-08 (post-demo-prep audit).
 | **Ready-Up buttons** | Implemented — **not in original design doc** | `/api/game/{id}/ready` | Added because the demo needed a way to move faster than the timer, not a doc requirement |
 | **Turn Timer + Pause/Extend** | Implemented — **not in original design doc** | `/api/game/{id}/timer` | Doc specifies "Turn Duration" as a game option but no live countdown/host pause UX; this was built because a live multi-browser demo needed it |
 | **Multi-browser lobby / join-by-code** | Implemented — **not in original design doc** | `/join-game`, `/start` | Doc's "Game Interface" section assumes a persistent account-based lobby; this is a lightweight session-less version built for the demo |
+| **Rally-point map markers** | Implemented — **not in original design doc** | `renderGalaxyMap` → `rallyLinks` | Player-scoped, dashed line + "R" flag on the rally system. Rally logic itself is doc-spec; the on-map indicator is a UX add. |
+| **AI + Human mixed play** | **NOT implemented — parked for very late stage** | — | User note: investigate feasibility after core game is playable, possibly post-launch. Current legal-random-mover bot (`tests/backend/bot.py`) could seed this. |
 
 ## Test-harness coverage vs. this matrix (2026-08)
 
@@ -50,5 +52,7 @@ Last updated: 2026-08 (post-demo-prep audit).
   e.g. concurrent ready-up double-resolving a turn, or concurrent order
   submission from two players clobbering each other.
 - Still missing (deferred per user 2026-08): a "play until Standard victory"
-  end-to-end test, and any test around Turn Limit / other victory modes --
-  both blocked on those rules not existing yet, not on test-harness gaps.
+  end-to-end test — unblocked now that the engine actually locks on
+  victory, but writing it now would need a rewrite once other victory
+  conditions land, so still parked. Turn Limit / other victory modes
+  also still deferred, blocked on those rules not existing yet.

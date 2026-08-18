@@ -12,6 +12,17 @@ Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Clau
 
 ## Changelog
 
+### 2026-08 — Victory Lock + Map Rally Markers
+- **Victory Lock (real game-over, not a banner)**: `GameEngine` now has `game_over: bool` and `final_victory: dict`. At the end of every `resolve_turn()` we run `check_victory_condition()`; if a winner is found we freeze the state (`game_over = True`, `final_victory` snapshots winner/systems_controlled/total/required plus the `final_turn` the win happened on, `turn_deadline = None`, `ready_players` cleared) and RETURN without advancing the turn — the state players see is the state that produced the win. All subsequent `resolve_turn()` calls short-circuit on `game_over`. A new `_require_active_game(game)` helper 409s every mutating endpoint after a win: `/orders`, `/build-orders`, `/espionage-orders`, `/resolve-turn`, `/timer`, `/ready`, `/starfleets/{id}/rally`, `/action`. `/state` remains readable so the frontend can render the game-over screen. `game_over` and `final_victory` are surfaced in the serialized state alongside the transient `victory_status`.
+- **Frontend Game-Over screen**: `renderVictoryStatus` upgraded — when `game_over: true` a full-screen backdrop-blurred modal takes over showing the winner's name in their player color, systems controlled / threshold / final turn, and a **Return to Home** button (`data-testid="game-over-return-home-btn"`). The button calls a new `returnToHome()` helper that resets ALL local state (gameState, orders, dialogs, join form, seen-combat set, autoResolveFired refs) and strips `?game=<id>` from the URL via `history.replaceState`, so the old lobby link doesn't re-hydrate on the next render. Auto-resolve tick also bails when `game_over` is true so the timer chip never flashes "0:00" against a locked game.
+- **Map Rally Markers**: `renderGalaxyMap` now computes a `rallyLinks` list from the current player's own fleets with `rally_point` set (scoped by owner defensively — even though the API already redacts rally_point on non-FULL visibility, this keeps things safe for a future shared-sight/spectator view). For each link it draws a thin dashed line in the player's color from the fleet's current system to its rally system, and stamps a small colored "R" flag on the rally system itself (deduped, so multiple fleets rallying to the same spot only paint one flag). Rendered under the move/support arrows and under system nodes with `pointerEvents="none"`, so clicks still land on the underlying node.
+- **Fleet-KeyError soak-test crash fixed**: while running the soak test after the victory-lock landed, it turned up an intermittent `KeyError: <fleet_id>` in resolution: a fleet with a pending move order was destroyed as a defender of its OWN home system (attacked in a different combat that resolved first), then the target-system's combat tried to `del old_system.starfleets[<same fleet id>]` and blew up. Fixed at two layers: (a) `resolve_system_combat` now filters `incoming_starfleets` down to fleets still present in `self.starfleets` at the moment of combat, so a fleet destroyed earlier this phase is silently dropped; (b) both `del old_system.starfleets[sf.id]` movement lines are guarded with `if sf.id in old_system.starfleets` in case the fleet's roster was already touched. This is a real latent bug — dict iteration order (post-uuid fleet ids) made it show up on ~30–40% of soak runs.
+- **Duplicate-key React warning fixed**: connection lines in the galaxy map now key on the sorted-pair `conn-{a}-{b}` so A↔B mutual links don't collide in React's key check.
+- **Test-only scaffold endpoints (gated)**: `/api/game/{id}/_test/force-victory` and `/api/game/{id}/_test/give-system` were added to make the E2E victory / rally-non-self-target flows testable without playing an entire game. Both 404 unless `EXPOSE_TEST_ENDPOINTS=1` is set in `/app/backend/.env`. `server.py` now `load_dotenv()`s the backend env file at import so this (and `MONGO_URL` / `DB_NAME` if persistence is ever wired) actually reach the process.
+- **Tests**: `tests/backend/test_victory_lock.py` (6 new engine-level tests); `tests/backend/test_victory_lock_http.py` (7 new HTTP-level tests against the live URL); `tests/backend/test_soak_multi_turn.py` updated to break cleanly on `engine.game_over` instead of asserting an ever-advancing turn counter. Full suite: **37 passed / 1 skipped** (up from 24).
+- **Design-doc traceability updated**: `Game actually ends/locks on victory` and the Standard victory row are now Implemented. Added new backlog rows for **Turn Limit end-condition** (design doc mentions "Turn Duration" as a per-turn timer, does NOT specify a max-turns end-condition — design-decision-pending P2, not a code gap; the existing turn timer + auto-resolve already prevents AFK stalls per user's own analysis) and **AI + Human mixed play** (very-late-stage, possibly post-launch — the legal-random-mover bot could seed a future strategic AI seat).
+- **Explicitly deferred by user this session**: Diplomacy Stub — user considers diplomacy one of the most important/unique systems in Consilium Mundi and does not want it kludged in; will build it as a proper system, not a placeholder.
+
 ### 2026-08 — Test-harness audit + soak/concurrency tests + real bug fix
 - **Audit finding**: no existing test played a game to completion, and the underlying "finish" rules aren't fully built — `check_victory_condition()` only implements 1 of the design doc's 5 victory conditions (Standard, >50% systems), there's no Turn Limit, and the game doesn't actually lock/end on victory (`victory_status` is a banner only, `resolve_turn()` keeps advancing). Full breakdown in `/app/memory/design_doc_traceability.md`. **User decision**: leave end-game rules as-is for now; focus the harness on invariants that survive future feature churn instead.
 - **`tests/backend/bot.py`** (new): a "legal random-mover" bot that drives a player through the real HTTP API (build/move/support/rally/ready) — not a strategic AI, just guarantees every action is legal, so multi-turn tests exercise real code paths instead of an idle no-op "AI".
@@ -83,22 +94,28 @@ Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Clau
 
 ### P0 — done
 - Restore compiled/runnable app.
-- Multi-party combat accuracy (Issue 3).
-- Map UI indicators for pending orders (Issue 4).
+- Multi-party combat accuracy.
+- Map UI indicators for pending orders.
+- **Victory Lock** — game actually stops and shows a final screen on win (Aug 2026).
 
 ### P1 — next
-- **"No combat this turn" placeholder** rows in combat panel for turns where the player had no engagements (needs list of resolved turns tracked in engine).
-- **Retreat & rally point** logic (`retreat_starfleet` is a no-op TODO).
+- **Diplomacy phase** (proper implementation, not a stub — the messaging/alliance/shared-sight system is one of the game's core differentiators per the user; do not kludge it).
+- **Shared sight with allies** (build alongside Diplomacy, opt-in per pair).
+- **"No combat this turn" placeholder** rows in combat panel for turns where the player had no engagements.
 - **Post-turn resource warnings**: revisit hard-block vs. soft warning UX.
 
 ### P2 — later
+- **Additional victory conditions** (Galactic Domination, Last Civ Standing, Corporate Takeover, Gunship Diplomacy).
+- **Turn Limit end-condition (design decision pending)** — design doc mentions "Turn Duration" as a per-turn timer but does NOT specify a max-turns rule. Needs a design pass: is it "no cap" vs. "N turns → highest-score wins"? The existing turn timer + auto-resolve already prevents AFK stalls, so this is a game-design call, not a stability blocker.
 - Detailed Espionage mechanic and resource costs.
 - Replay / enhanced combat timeline (per-turn diff view).
 - Highlight/animate resource widget rows when they change.
 - Refactor `App.js` into smaller components; split `server.py` (routes vs. engine).
 
 ### Future
-- Turn timer & auto-resolution (background scheduler).
+- **AI players mixed with human players** — very late stage, possibly post-launch. Investigate whether the current legal-random-mover bot could be evolved into a strategic AI seat that plays alongside humans in a live game.
+- Full-game "play to Standard victory" e2e automated test (unblocked now that victory locks — write once other victory conditions land so we don't have to rewrite it).
+- Separate Trade Phase (currently collapsed into Resolution).
 - Real-time updates (WebSocket/SSE).
 
 ## Notes for the next agent

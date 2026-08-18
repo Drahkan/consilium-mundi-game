@@ -613,3 +613,94 @@ body {
 .dialog-button-warning:hover {
   background-color: #b91c1c;
 }
+/* Game-over full-screen victory modal.
+   Blocks the rest of the UI once the engine has locked the game so no
+   stale "your move" affordance can hint at a game that will never
+   resolve again. Backdrop-blur keeps the final map visible behind. */
+.game-over-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(6, 8, 20, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.game-over-modal {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 32px 40px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  color: #e2e8f0;
+}
+
+.game-over-header h1 {
+  font-size: 40px;
+  margin: 0 0 4px 0;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.game-over-subtitle {
+  color: #94a3b8;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.game-over-body {
+  margin: 20px 0 28px 0;
+}
+
+.game-over-winner {
+  font-size: 16px;
+  line-height: 1.55;
+  margin: 0 0 16px 0;
+  color: #cbd5e1;
+}
+
+.game-over-stats {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid #1e293b;
+  padding-top: 14px;
+}
+
+.game-over-stats li {
+  padding: 4px 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.game-over-stats li strong {
+  color: #e2e8f0;
+}
+
+.game-over-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.game-over-home-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.game-over-home-btn:hover {
+  background: #1d4ed8;
+}
