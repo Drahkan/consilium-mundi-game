@@ -3,14 +3,31 @@
 ## Original problem statement
 Turn-based space strategy game (React + FastAPI + MongoDB) transferred from Claude. Continue evolving gameplay (multi-party combat, warnings, map polish) without breaking auth-lightweight local flow. Environment: Kubernetes with supervisor, `/api` prefix required.
 
-## Architecture (as of Feb 2026)
-- `/app/backend/server.py` — FastAPI + monolithic `GameEngine` (galaxy gen, orders, combat, resolve).
-- `/app/backend/persistence.py` — Optional MongoDB DAO layer (lazy). No-op if `MONGO_URL` unset.
-- `/app/frontend/src/App.js` — Monolithic React UI (~2200 lines): lobby, map, orders, combat reports.
-- `/app/tests/backend/` — Pytest suite (targeted combat unit tests).
-- `/app/consilium-mundi-game/` — Read-only git checkout of upstream repo (used as source-of-truth backup).
+## Architecture (as of June 2026 — KERNEL WRAP)
+**MAJOR CHANGE:** Game *rules* are now owned by a sealed TypeScript kernel (`packages/consilium-kernel/`, run via `node cli.mjs`), NOT Python. Emergent owns *hosting* only (lobby, timers, ready-up, Mongo, deploy, App.js chrome). Standing law: `GROK_EMERGENT.md`, `KERNEL.md`, `HOSTING.md`, `docs/ConsiliumMundi-DD-v1.0.5.pdf`.
+- `/app/packages/consilium-kernel/` — sealed rules kernel (mapgen, combat, diplomacy, alliances, pacts, victory, AI). **Do NOT edit, port, or "fix" these files.** `cli.mjs` is the single Node entrypoint (`echo '{"op":"ping"}' | node cli.mjs` → `pong`).
+- `/app/backend/kernel_bridge.py` — `kernel(op, **payload)` subprocess bridge to Node.
+- `/app/backend/kernel_api.py` — `mount_kernel(app)` registers ALL `/api` routes; wraps kernel ops and speaks the legacy JSON App.js expects (systems dict, player_resources, kernel.threads, ready_players, turn_deadline, game_over). Diplomacy routes: `POST /api/game/{id}/diplomacy/{send|accept|decline|counter|denounce}`. Matches are in-memory (`matches` dict); persistence.GameDAO not yet wired.
+- `/app/backend/server.py` — FastAPI app + CORS + `class GameEngine` (LEGACY, no HTTP routes, kept only for old in-process unit tests). New matches use `openMatchLegacy` (kernel), never construct GameEngine.
+- `/app/frontend/src/App.js` — hosting chrome (lobby, map, orders, ready-up, timer, replay). Keep URLs.
+- `/app/frontend/src/DiplomacyPouch.jsx` — templated diplomacy pouch (ported from `ui-reference/diplomacy-modal.tsx`). No free-text chat; offers show goods GIVEN and RECEIVED with Accept/Decline/Counter.
+- `/app/ui-reference/` — Grok's reference TSX (diplomacy-modal, galaxy-map, play-screen, replay-viewer, flag) to port into App.js. Do not invent a chat box.
+- Kernel clamps `num_players` to a minimum of 3 (host + AI seats; humans claim AI seats on join).
+
+## Architecture (LEGACY — pre-kernel, historical)
+Turn-based space strategy game (React + FastAPI + MongoDB). Environment: Kubernetes with supervisor, `/api` prefix required.
 
 ## Changelog
+
+### 2026-06 (session 4) — Grok kernel wrap + templated diplomacy pouch
+- **Kernel wrap adopted**: unpacked Grok's full-tree zip over `/app` (preserving protected `.env`s + `.git`). Node v20 confirmed on host; kernel ping returns `pong`. Verified full loop against existing App.js: create-game → 2 joins auto-start (3-player) → fleet order → all ready → turn advances → replay snapshot captured. `mount_kernel(app)` active; GameEngine has **0** HTTP routes; new matches never construct GameEngine.
+- **Diplomacy routes** added to `kernel_api.py` (send/accept/decline/counter/denounce) wrapping kernel ops `sendDispatch/acceptDispatch/declineDispatch/counterDispatch/denounce`.
+- **DiplomacyPouch.jsx** ported: peer list (with allied badge + unread counts), threads, per-message TermsView showing **You receive** / **You give** (goods + landing systems), Accept/Decline/Counter, and a templated ComposeForm (topics: trade/alliance/attack/support/espionage/intelligence; attitudes; trade give/request with landing-system selects; intents; unless-conditions). Header `Diplomacy` button (unread badge). Compose landing dropdowns only offer provably-visible landings (no all-systems fallback) so senders can't compose offers the recipient can't fulfil; Send disabled when trade landings are missing.
+- **DD PDF** stored at `docs/ConsiliumMundi-DD-v1.0.5.pdf`.
+- **Tested**: backend 12/12 pytest (`backend/tests/test_kernel_diplomacy.py`) + testing agent frontend E2E (iteration_3.json) — pouch renders goods given/received with Accept/Decline/Counter; both at 100%.
+- **Known limits (real blockers only)**: (a) matches are in-memory — a backend restart drops all games (persistence.GameDAO not wired); (b) under fog-of-war a sender may not see a peer's borders, so trade *requests* are limited to visible landings (kernel remains authority and rejects illegal landings); (c) alliance-incident responses (`answerIncident`) and pact-delivery scheduling (`deliverPact`) are not yet surfaced in the pouch UI.
+
+
 
 ### 2026-08 (session 3) — Full Replay + Score Card + Combat Timeline + Rally Ghost Preview
 - **End-Screen Score Card**: game-over modal redesigned per user spec — winner name in the winner's color, condition label ("Standard Victory — controls more than half the galaxy"), per-player score card (systems / starfleets / upgrades / T·M·C resources) with the winner starred and highlighted, primary "View Full Replay" action, and a small, muted "Return to Home Screen" button at the very bottom (separated by a border, tiny type, transparent bg) so it's not accidentally clicked while reaching for game-info actions. All fields exposed via `game.final_victory.score_card` and `game.final_victory.condition_label`.

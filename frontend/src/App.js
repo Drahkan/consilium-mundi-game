@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
+import DiplomacyPouch from './DiplomacyPouch';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -27,6 +28,7 @@ function App() {
   const [playerBuildOrders, setPlayerBuildOrders] = useState({}); // Per-player build orders
   const [showBuildPanel, setShowBuildPanel] = useState(false);
   const [showCombatReports, setShowCombatReports] = useState(false);
+  const [showDiplomacy, setShowDiplomacy] = useState(false);
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
   const [showOrderSummary, setShowOrderSummary] = useState(false);
@@ -3330,6 +3332,21 @@ function App() {
               </button>
             )}
 
+            {gameState?.phase === 'activity' && (
+              <button
+                onClick={() => setShowDiplomacy(true)}
+                className="combat-reports-btn"
+                data-testid="header-diplomacy-btn"
+                title="Open the diplomatic pouch — templated offers, alliances, trades"
+              >
+                Diplomacy{(() => {
+                  const th = gameState?.kernel?.threads || [];
+                  const unread = th.reduce((n, t) => n + t.messages.filter((m) => m.toPlayerId === currentPlayer && !m.read).length, 0);
+                  return unread ? ` (${unread})` : '';
+                })()}
+              </button>
+            )}
+
             <button
               onClick={centerHomeWorld}
               className="center-home-btn"
@@ -3357,6 +3374,21 @@ function App() {
           {renderVictoryStatus()}
           {/* Full Replay viewer (over game-over) */}
           {renderReplayViewer()}
+          {/* Diplomatic pouch */}
+          {showDiplomacy && (
+            <DiplomacyPouch
+              apiBase={API_BASE}
+              gameId={currentGame}
+              me={currentPlayer}
+              gameState={gameState}
+              playersMeta={availablePlayers}
+              onClose={() => setShowDiplomacy(false)}
+              reload={async () => {
+                await loadGameState(currentGame, currentPlayer);
+                await loadGamePlayers(currentGame);
+              }}
+            />
+          )}
           
           <div className="galaxy-section">
             {renderGalaxyMap()}

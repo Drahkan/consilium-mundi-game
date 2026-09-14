@@ -1011,3 +1011,95 @@ body {
   letter-spacing: 0.3px;
 }
 .proceed-anyway-btn:hover { color: #cbd5e1; border-color: #334155; }
+
+/* ===== Diplomatic Pouch ===== */
+.diplo-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(3, 7, 18, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.diplo-modal {
+  width: 100%; max-width: 900px; max-height: 90vh;
+  display: flex; flex-direction: column;
+  background: #0b1220; border: 1px solid #1e293b; border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  overflow: hidden; color: #e2e8f0;
+}
+.diplo-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #1e293b;
+  background: linear-gradient(135deg, #111a2e, #0b1220);
+}
+.diplo-header h2 { margin: 0; font-size: 20px; letter-spacing: 0.4px; color: #f8fafc; }
+.diplo-close {
+  background: transparent; border: 1px solid #334155; color: #94a3b8;
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 15px;
+}
+.diplo-close:hover { border-color: #475569; color: #e2e8f0; }
+.diplo-error {
+  margin: 12px 20px 0; padding: 8px 12px; border-radius: 8px;
+  background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; font-size: 13px;
+}
+.diplo-body { display: grid; grid-template-columns: 220px 1fr; gap: 0; min-height: 0; flex: 1; }
+.diplo-peers { border-right: 1px solid #1e293b; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.diplo-peer {
+  text-align: left; background: transparent; border: 1px solid transparent;
+  border-radius: 8px; padding: 10px; cursor: pointer; color: #cbd5e1;
+}
+.diplo-peer:hover { background: rgba(148,163,184,0.08); }
+.diplo-peer.active { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.4); }
+.diplo-peer-name { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #f1f5f9; }
+.diplo-peer-meta { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-top: 3px; }
+.diplo-badge-allied { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: rgba(34,197,94,0.18); color: #86efac; }
+.diplo-badge-unread { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: rgba(251,146,60,0.2); color: #fdba74; margin-left: auto; }
+.diplo-new-btn { margin-top: 8px; padding: 9px; border-radius: 8px; border: 1px solid #3b82f6; background: rgba(59,130,246,0.18); color: #bfdbfe; cursor: pointer; font-size: 13px; }
+.diplo-new-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.diplo-denounce-btn { margin-top: 4px; padding: 8px; border-radius: 8px; border: 1px solid #7f1d1d; background: transparent; color: #f87171; cursor: pointer; font-size: 12px; }
+.diplo-main { padding: 16px 20px; overflow-y: auto; min-width: 0; }
+.diplo-muted { color: #64748b; font-size: 13px; }
+.diplo-threads { display: flex; flex-direction: column; gap: 10px; }
+.diplo-thread { border: 1px solid #1e293b; border-radius: 10px; background: #0f1729; overflow: hidden; }
+.diplo-thread-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: transparent; border: none; color: #cbd5e1; cursor: pointer; }
+.diplo-topic { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #38bdf8; }
+.diplo-thread-meta { margin-left: auto; font-size: 10px; color: #64748b; }
+.diplo-messages { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #1e293b; }
+.diplo-msg { background: #0b1220; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; }
+.diplo-msg-status { display: flex; justify-content: flex-end; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.diplo-status-open { color: #38bdf8; }
+.diplo-status-accepted { color: #4ade80; }
+.diplo-status-declined { color: #f87171; }
+.diplo-status-countered { color: #fbbf24; }
+.diplo-msg-text { margin: 4px 0 0; font-size: 14px; line-height: 1.5; color: #cbd5e1; }
+.diplo-terms { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: rgba(30,41,59,0.5); border: 1px solid #1e293b; }
+.diplo-terms-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: #64748b; margin-bottom: 6px; }
+.diplo-terms-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 14px; padding: 2px 0; }
+.diplo-recv { color: #4ade80; }
+.diplo-give { color: #fb7185; }
+.diplo-terms-val { text-align: right; color: #f1f5f9; font-weight: 500; }
+.diplo-terms-intent { margin-top: 6px; font-size: 12px; color: #94a3b8; }
+.diplo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.diplo-accept { padding: 8px 16px; border-radius: 8px; border: 1px solid #16a34a; background: rgba(22,163,74,0.2); color: #86efac; cursor: pointer; font-size: 13px; }
+.diplo-decline { padding: 8px 16px; border-radius: 8px; border: 1px solid #475569; background: transparent; color: #cbd5e1; cursor: pointer; font-size: 13px; }
+.diplo-counter { padding: 8px 16px; border-radius: 8px; border: 1px solid #ca8a04; background: rgba(202,138,4,0.15); color: #fde68a; cursor: pointer; font-size: 13px; }
+.diplo-accept:disabled, .diplo-decline:disabled, .diplo-counter:disabled { opacity: 0.5; cursor: not-allowed; }
+.diplo-compose h3, .diplo-counter-form { color: #f1f5f9; }
+.diplo-compose h3 { font-size: 15px; margin: 0 0 12px; }
+.diplo-field { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 12px; }
+.diplo-field select, .diplo-field input { width: 100%; margin-top: 5px; padding: 9px; border-radius: 8px; background: #0b1220; border: 1px solid #334155; color: #e2e8f0; font-size: 14px; text-transform: none; letter-spacing: normal; }
+.diplo-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: #94a3b8; margin-bottom: 12px; }
+.diplo-check input { margin-top: 3px; }
+.diplo-trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.diplo-trade-col { background: rgba(30,41,59,0.4); border: 1px solid #1e293b; border-radius: 10px; padding: 10px; }
+.diplo-trade-col select { width: 100%; margin-top: 8px; padding: 8px; border-radius: 8px; background: #0b1220; border: 1px solid #334155; color: #e2e8f0; font-size: 13px; }
+.diplo-resrow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.diplo-reslabel { font-size: 10px; text-transform: uppercase; color: #64748b; display: flex; flex-direction: column; }
+.diplo-reslabel input { margin-top: 3px; padding: 7px; border-radius: 6px; background: #0b1220; border: 1px solid #334155; color: #e2e8f0; font-size: 14px; text-align: center; }
+.diplo-counter-form { margin-top: 10px; padding: 12px; border-radius: 8px; background: rgba(30,41,59,0.4); border: 1px solid #334155; }
+@media (max-width: 640px) {
+  .diplo-body { grid-template-columns: 1fr; }
+  .diplo-peers { border-right: none; border-bottom: 1px solid #1e293b; flex-direction: row; flex-wrap: wrap; }
+  .diplo-trade-grid { grid-template-columns: 1fr; }
+}
+.diplo-land-hint { margin-top: 6px; font-size: 11px; color: #fbbf24; line-height: 1.4; }

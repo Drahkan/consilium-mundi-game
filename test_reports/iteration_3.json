@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 3 — validated kernel-backed backend routes and the templated diplomacy pouch UI end-to-end. Backend: 12/12 pytest passed (test_kernel_diplomacy.py) covering full game loop (create-game → 2 joins auto-fill to 3, state shape with systems/player_resources/kernel/ready_players/turn_deadline/game_over, fleet order accepted, ready→turn advance, replay snapshots) and full diplomacy ops (send→open message, counter→countered+new open, accept→kernel.pacts entry + accepted status, decline). Frontend: Create-Game→Start-Game→Activity phase reached; header-diplomacy-btn visible; overlay opens with 2 peer entries; compose form opens with Topic=trade; give-chon + give-sys + request-sys populated; Send succeeded with no error; Solo Mode toggled → header-player-selector revealed; switched to recipient; overlay reopened; TermsView correctly rendered 'You receive 2 CHON — lands at Vela Delta' and 'You give 1 CHON — lands at Mire Tau'; Accept/Decline/Counter-offer buttons all present with correct data-testids. The Accept click in the E2E script surfaced a kernel validation error ('You do not border Mire Tau, so you cannot land a delivery there.') because the compose dropdown for request-sys is filtered from the SENDER'S visible-systems (fog-of-war basic) — so systems shown to Alice as 'peer landing candidates' aren't guaranteed to actually border the peer's real territory. Backend accept path is validated (test_04_alice_accepts_counter passes) when each side picks its own state-visible landing system. This is likely a spec constraint of templated offers under FOW, not a code bug — flagged for review.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Diplomacy compose → recipient accept", "issue": "Sender's compose request-sys dropdown lists 'peer landing candidates' computed from the sender's own visible-systems (fog-of-war basic). Under FOW the sender may not see the peer's real borders, so a selected request-sys can be a system the recipient does NOT actually border, causing kernel to correctly reject the accept with 'You do not border <sys>, so you cannot land a delivery there.' Recommend either (a) filtering the dropdown to only systems the peer is guaranteed to border (i.e., visible to sender AND known-adjacent to a peer-owned system as seen by sender), or (b) surfacing a clearer sender-side hint (e.g., '?' visibility marker on options that may not be valid for the recipient) so senders don't compose non-fulfillable offers.", "affected_selectors": ["diplomacy-compose-request-sys"]}
+    ],
+    "design_issues": [
+      {"screen": "Diplomatic pouch → recipient view", "issues": ["Landing systems the viewer cannot see are rendered as '??? ' in the terms block (e.g. '2 CHON — lands at ???'). Considered acceptable / intentional (FOW), noting for design review."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kernel_diplomacy.py", "/app/test_reports/pytest/iter3.xml"],
+  "action_items": [
+    "Consider filtering diplomacy-compose-request-sys options to systems that provably border a peer-owned system in the sender's visible state (or annotate uncertain ones) so the sender doesn't compose an offer the recipient cannot accept — see integration_issues.",
+    "OPTIONAL: When the recipient side receives an offer with a give/request system they cannot see, the terms row shows '??? '. Consider adding a tooltip explaining the system is out of your sensor range."
+  ],
+  "critical_code_review_comments": [
+    "kernel_bridge.py: subprocess call to node CLI on every kernel op — synchronous 120s timeout. Acceptable for MVP; if latency matters, consider a persistent Node subprocess with stdin/stdout newline-delimited JSON to avoid per-op fork/exec.",
+    "kernel_api.py:_maybe_resolve: calls resolveIfDue → replayFrame → skipReport in sequence — three separate node invocations per state fetch when a turn resolves. Consider merging into one kernel op to reduce subprocess overhead on hot paths.",
+    "kernel_api.py: matches dict is in-process memory only (persistence.GameDAO is imported but never wired). Any backend restart loses all games — acknowledged in review_request but worth capturing.",
+    "kernel_api.py:diplomacy_send builds args with fromId=payload.get('player_id'); ensure Pydantic validation eventually rejects missing player_id (currently defaults to None and the kernel returns an error — works but could be more explicit).",
+    "DiplomacyPouch.jsx compose form: request-sys candidates computed from the sender's fogged view (landingCandidates(systems, peer)) can include systems that don't actually border the peer's real territory — see integration_issues action item.",
+    "App.js:3325 combat-reports button hidden when count==0 (pre-existing, iteration_2 note still applies).",
+    "PRE-EXISTING (iterations 1+2): duplicate React key warnings for connection lines still likely present in renderGalaxyMap (no fresh evidence collected this run — not in scope)."
+  ],
+  "updated_files": ["/app/backend/tests/test_kernel_diplomacy.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "None (no auth)",
+  "seed_data_creation": "Each test creates a fresh in-memory game via /api/create-game + 2x /api/join-game (auto-fills to 3-player match).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Kernel is sealed Node CLI; do NOT modify packages/consilium-kernel. Diplomacy state fields: systems entries use 'owner' (not 'owner_id') and 'connections' (not 'neighbors'); fleets are in system.starfleet_details with 'owner'. To pick a valid landing system for player P: find a P-owned system, then a connection to a system P does NOT own with visibility='full'. In frontend, the Lobby shows a Start Game button after 3/3 players — must click that to enter activity phase (game does NOT auto-start on 3rd join in the UI, though backend marks started=true; the UI still displays the lobby until Start Game is clicked)."
+}

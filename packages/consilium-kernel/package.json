@@ -1,0 +1,10 @@
+{
+  "name": "consilium-kernel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sealed Consilium Mundi rules kernel. Call cli.mjs; do not rewrite.",
+  "scripts": {
+    "cli": "node cli.mjs"
+  }
+}
