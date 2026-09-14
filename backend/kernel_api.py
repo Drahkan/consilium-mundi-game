@@ -12,20 +12,117 @@ as a legacy import for old tests until those are rewritten.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from kernel_bridge import KernelError, kernel
 
-# In-memory matches. persistence.GameDAO can be wired by the host.
+log = logging.getLogger("kernel_api")
+
+# In-memory match cache (source of truth is Mongo via _dao).
 matches: Dict[str, Dict[str, Any]] = {}
 player_index: Dict[str, Dict[str, Any]] = {}
+
+# Persistence hook. Set by server.py at startup via set_dao(dao).
+_dao = None
+
+
+def set_dao(dao) -> None:
+    global _dao
+    _dao = dao
+
+
+HOST_META_KEYS = (
+    "started",
+    "turn_seconds",
+    "turn_due_at",
+    "turn_paused",
+    "turn_paused_remaining",
+    "host_player_id",
+)
+
+
+def _players_index_list(game_id: str) -> List[Dict[str, Any]]:
+    return [row for row in player_index.values() if row.get("game_id") == game_id]
+
+
+def _host_meta(m: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: m.get(k) for k in HOST_META_KEYS}
+
+
+def _persist(game_id: str, m: Dict[str, Any]) -> None:
+    """Serialize via CLI and fire-and-forget save to Mongo."""
+    if _dao is None:
+        return
+    try:
+        data = kernel("serialize", state=m["engine"])
+        blob = data.get("blob") or m["engine"]
+    except KernelError as e:
+        log.warning("persist: CLI serialize failed for %s: %s", game_id, e)
+        return
+
+    async def _do_save():
+        try:
+            await _dao.save_game(
+                game_id,
+                blob,
+                _players_index_list(game_id),
+                host_meta=_host_meta(m),
+            )
+        except Exception as e:  # noqa: BLE001
+            log.error("persist: DAO save_game failed for %s: %s", game_id, e)
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_do_save())
+    except RuntimeError:
+        # Called outside a running loop (tests). Do a best-effort sync run.
+        asyncio.run(_do_save())
+
+
+async def _hydrate_from_dao(game_id: str) -> Optional[Dict[str, Any]]:
+    if _dao is None:
+        return None
+    doc = await _dao.load_game(game_id)
+    if not doc:
+        return None
+    blob = doc.get("engine")
+    if not blob:
+        return None
+    try:
+        data = kernel("load", blob=blob)
+    except KernelError as e:
+        log.error("hydrate: CLI load rejected blob for %s: %s", game_id, e)
+        return None
+    state = data.get("state")
+    if not state:
+        return None
+    host_meta = doc.get("host_meta") or {}
+    m: Dict[str, Any] = {
+        "engine": state,
+        "started": bool(host_meta.get("started")),
+        "turn_seconds": int(host_meta.get("turn_seconds") or 300),
+        "turn_due_at": host_meta.get("turn_due_at"),
+        "turn_paused": bool(host_meta.get("turn_paused") or False),
+        "turn_paused_remaining": int(host_meta.get("turn_paused_remaining") or 0),
+        "snapshots": [],
+        "host_player_id": host_meta.get("host_player_id"),
+        "updated_at": _now_ms(),
+    }
+    matches[game_id] = m
+    for row in doc.get("players_index") or []:
+        pid = row.get("id")
+        if pid:
+            player_index[pid] = row
+    return m
 
 
 class CreateGameRequest(BaseModel):
@@ -61,6 +158,9 @@ def _reset_deadline(m: Dict[str, Any]) -> None:
 def _save_engine(m: Dict[str, Any], data: Dict[str, Any]) -> None:
     m["engine"] = data["state"]
     m["updated_at"] = _now_ms()
+    gid = m["engine"].get("id")
+    if gid:
+        _persist(gid, m)
 
 
 def _call(op: str, **payload: Any) -> Dict[str, Any]:
@@ -72,6 +172,16 @@ def _call(op: str, **payload: Any) -> Dict[str, Any]:
 
 def _require_match(game_id: str) -> Dict[str, Any]:
     m = matches.get(game_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return m
+
+
+async def _require_match_async(game_id: str) -> Dict[str, Any]:
+    m = matches.get(game_id)
+    if m:
+        return m
+    m = await _hydrate_from_dao(game_id)
     if not m:
         raise HTTPException(status_code=404, detail="Game not found")
     return m
@@ -143,11 +253,12 @@ def mount_kernel(app: FastAPI) -> None:
             "name": request.player_name,
             "game_id": game_id,
         }
+        _persist(game_id, m)
         return {"game_id": game_id, "player_id": host_id, "status": "created"}
 
     @app.post("/api/join-game")
     async def join_game(request: JoinGameRequest):
-        m = _require_match(request.game_id)
+        m = await _require_match_async(request.game_id)
         data = _call(
             "claimSeatNamed",
             state=m["engine"],
@@ -166,6 +277,7 @@ def mount_kernel(app: FastAPI) -> None:
         if len(humans) >= wanted:
             m["started"] = True
             _reset_deadline(m)
+        _persist(request.game_id, m)
         return {
             "game_id": request.game_id,
             "player_id": seat["id"],
@@ -174,7 +286,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/add-ai-players")
     async def add_ai_players(game_id: str):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         state = m["engine"]
         ais = [p for p in state["players"] if p.get("kind") == "ai"]
         added = [{"id": p["id"], "name": p.get("name") or p.get("civ", {}).get("name")} for p in ais]
@@ -187,7 +299,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/start")
     async def start_game(game_id: str, payload: Optional[Dict[str, Any]] = None):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         if m.get("started"):
             return {"status": "already_started", "game_id": game_id, "phase": "activity"}
         m["started"] = True
@@ -201,14 +313,14 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.get("/api/game/{game_id}/state")
     async def get_game_state(game_id: str, player_id: Optional[str] = None):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         if m.get("started"):
             _maybe_resolve(m)
         return _legacy_view(m, player_id)
 
     @app.get("/api/game/{game_id}/players")
     async def get_game_players(game_id: str):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         out = []
         for p in m["engine"]["players"]:
             row = player_index.get(p["id"])
@@ -226,7 +338,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.get("/api/game/{game_id}/replay")
     async def get_game_replay(game_id: str):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         meta = []
         for p in m["engine"]["players"]:
             row = player_index.get(p["id"])
@@ -244,7 +356,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/orders")
     async def submit_orders(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "applyLegacyFleetOrders",
@@ -257,7 +369,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/build-orders")
     async def submit_build_orders(game_id: str, build_data: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "applyLegacyBuildOrders",
@@ -270,7 +382,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/espionage-orders")
     async def submit_espionage_orders(game_id: str, espionage_data: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         player_id = espionage_data.get("player_id")
         state = m["engine"]
@@ -296,7 +408,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/resolve-turn")
     async def resolve_turn(game_id: str):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call("resolveIfDue", state=m["engine"], turnDueAt=0)
         framed = _call("replayFrame", state=data["state"])
@@ -309,7 +421,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/timer")
     async def control_timer(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         action = (payload or {}).get("action")
         extra = int((payload or {}).get("seconds") or 120)
         if action == "pause" and not m.get("turn_paused"):
@@ -329,7 +441,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/ready")
     async def player_ready(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         player_id = payload.get("player_id")
         ready = payload.get("ready", True)
@@ -342,7 +454,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/starfleets/{starfleet_id}/rally")
     async def set_rally(game_id: str, starfleet_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "applyLegacyRally",
@@ -356,7 +468,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/diplomacy/send")
     async def diplomacy_send(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         args = {
             "fromId": payload.get("player_id"),
@@ -381,7 +493,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/diplomacy/accept")
     async def diplomacy_accept(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "acceptDispatch",
@@ -394,7 +506,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/diplomacy/decline")
     async def diplomacy_decline(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "declineDispatch",
@@ -407,7 +519,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/diplomacy/counter")
     async def diplomacy_counter(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "counterDispatch",
@@ -421,7 +533,7 @@ def mount_kernel(app: FastAPI) -> None:
 
     @app.post("/api/game/{game_id}/diplomacy/denounce")
     async def diplomacy_denounce(game_id: str, payload: Dict[str, Any]):
-        m = _require_match(game_id)
+        m = await _require_match_async(game_id)
         _require_active(m)
         data = _call(
             "denounce",
@@ -433,15 +545,76 @@ def mount_kernel(app: FastAPI) -> None:
         _save_engine(m, data)
         return {"status": "ok"}
 
+    @app.get("/api/game/{game_id}/diplomacy/inbox/{player_id}")
+    async def diplomacy_inbox(game_id: str, player_id: str):
+        m = await _require_match_async(game_id)
+        data = _call("inboxForPlayer", state=m["engine"], viewerId=player_id)
+        inbox = data.get("inbox") or {}
+        return {
+            "pending": inbox.get("pending") or [],
+            "incidents": inbox.get("incidents") or [],
+            "unsentPacts": inbox.get("unsentPacts") or [],
+        }
+
+    @app.get("/api/game/{game_id}/diplomacy/frontier")
+    async def diplomacy_frontier(game_id: str, player_id: str, to_id: str):
+        m = await _require_match_async(game_id)
+        data = _call(
+            "tradeFrontier",
+            state=m["engine"],
+            playerId=player_id,
+            toId=to_id,
+        )
+        return {"systemIds": data.get("systemIds") or []}
+
+    @app.post("/api/game/{game_id}/diplomacy/answer-incident")
+    async def diplomacy_answer_incident(game_id: str, payload: Dict[str, Any]):
+        m = await _require_match_async(game_id)
+        _require_active(m)
+        kwargs = {
+            "state": m["engine"],
+            "viewerId": payload.get("player_id"),
+            "incidentId": payload.get("incident_id"),
+            "action": payload.get("action"),
+        }
+        if payload.get("unless"):
+            kwargs["unless"] = payload["unless"]
+        data = _call("answerIncident", **kwargs)
+        _save_engine(m, data)
+        return {"status": "ok"}
+
+    @app.post("/api/game/{game_id}/diplomacy/deliver-pact")
+    async def diplomacy_deliver_pact(game_id: str, payload: Dict[str, Any]):
+        m = await _require_match_async(game_id)
+        _require_active(m)
+        data = _call(
+            "deliverPact",
+            state=m["engine"],
+            playerId=payload.get("player_id"),
+            pactId=payload.get("pact_id"),
+        )
+        _save_engine(m, data)
+        return {"status": "ok"}
+
     @app.get("/api/games")
     async def list_games():
+        # Prefer Mongo (survives restart); fall back to in-memory for tests.
+        if _dao is not None:
+            try:
+                rows = await _dao.list_games_info()
+                if rows:
+                    return {"games": rows}
+            except Exception as e:
+                log.warning("list_games: DAO failed, falling back: %s", e)
         out = []
         for gid, m in matches.items():
             eng = m.get("engine") or {}
+            humans = [p for p in (eng.get("players") or []) if p.get("kind") == "human"]
             out.append(
                 {
                     "id": gid,
-                    "players": len(eng.get("players") or []),
+                    "players": len(humans),
+                    "max_players": (eng.get("options") or {}).get("playerCount"),
                     "phase": eng.get("phase"),
                     "turn": eng.get("turn"),
                 }

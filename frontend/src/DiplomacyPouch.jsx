@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 // Templated diplomacy pouch — ported from ui-reference/diplomacy-modal.tsx.
 // No free-text chat: every dispatch is a structured, templated offer. Trade
@@ -171,6 +171,8 @@ export default function DiplomacyPouch({ apiBase, gameId, me, gameState, players
               <p className="diplo-muted">Select a power on the left.</p>
             ) : compose ? (
               <ComposeForm
+                apiBase={apiBase}
+                gameId={gameId}
                 me={me}
                 peer={peer}
                 systems={systems}
@@ -431,12 +433,30 @@ function CounterForm({ original, systems, busy, onCancel, onSend }) {
   );
 }
 
-function ComposeForm({ me, peer, systems, nameOf, allied, busy, onCancel, onSend }) {
+function ComposeForm({ apiBase, gameId, me, peer, systems, nameOf, allied, busy, onCancel, onSend }) {
   const [topic, setTopic] = useState('trade');
   const [attitude, setAttitude] = useState('neutral');
   const [give, setGive] = useState({ ...ZERO });
   const [request, setRequest] = useState({ tech: 0, metals: 0, chon: 1 });
-  const myDests = useMemo(() => landingCandidates(systems, me), [systems, me]);
+
+  // Kernel-authoritative landings for "you give" (sender → recipient). FoW-safe:
+  // do NOT compute from the sender's fogged systems map. The kernel returns the
+  // legal frontier for a trade from `me` to `peer`.
+  const [frontierIds, setFrontierIds] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    if (!apiBase || !gameId || !me || !peer) { setFrontierIds([]); return; }
+    fetch(`${apiBase}/api/game/${gameId}/diplomacy/frontier?player_id=${encodeURIComponent(me)}&to_id=${encodeURIComponent(peer)}`)
+      .then((r) => r.ok ? r.json() : { systemIds: [] })
+      .then((d) => { if (alive) setFrontierIds(d.systemIds || []); })
+      .catch(() => { if (alive) setFrontierIds([]); });
+    return () => { alive = false; };
+  }, [apiBase, gameId, me, peer]);
+
+  const myDests = useMemo(
+    () => frontierIds.map((id) => systems[id]).filter(Boolean),
+    [frontierIds, systems],
+  );
   const theirDests = useMemo(() => landingCandidates(systems, peer), [systems, peer]);
   const allSys = useMemo(() => visibleSystems(systems), [systems]);
   const [giveSystemId, setGiveSystemId] = useState('');
@@ -552,7 +572,7 @@ function ComposeForm({ me, peer, systems, nameOf, allied, busy, onCancel, onSend
               {myDests.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             {myDests.length === 0 && (
-              <div className="diplo-land-hint">No system of yours borders open space in sensor range — you cannot land goods here.</div>
+              <div className="diplo-land-hint">You have no legal landing that reaches this power — scout their borders or wait for a shared frontier before offering goods.</div>
             )}
           </div>
           <div className="diplo-trade-col">

@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 4 — validated the four Emergent deliverables against Grok Build's sealed kernel v2. Backend: 22/22 pytest passed across test_kernel_persistence.py (new, 10 tests) + test_kernel_diplomacy.py (regression, 12 tests). Verified: (1) kernel ping returns {ok:true, pong:true, version:2}; (2) POST /api/create-game persists a Mongo doc under `games` with doc.engine.turn, doc.engine.options.playerCount, and doc.engine.turnSnapshots all present (CLI serialize blob contract); (3) after `sudo supervisorctl restart backend` (clears matches dict + player_index), GET /api/game/{id}/state re-serves systems for the same game_id — proves _hydrate_from_dao → CLI `load` roundtrip; (4) GET /api/games returns rows whose max_players == the persisted engine.options.playerCount (3, since kernel appears to enforce a min of 3 even when config.num_players=2 is passed — spec constraint of the kernel, not a bug); (5) GET /api/game/{id}/diplomacy/inbox/{player_id} returns {pending:[], incidents:[], unsentPacts:[]} for fresh game (all arrays); (6) GET /api/game/{id}/diplomacy/frontier?player_id=A&to_id=B returns {systemIds:[...]} (list, does not 500); (7) POST /api/game/{id}/diplomacy/answer-incident with bogus incident_id returns HTTP 400 with a non-empty kernel-derived detail string (proves wired, not a stub); (8) POST /api/game/{id}/diplomacy/deliver-pact with bogus pact_id returns HTTP 400 with kernel-derived detail; (9) full game loop post-restart: state → ready x2 → time.sleep → turn advanced. Frontend: root URL loads Consilium Mundi lobby cleanly, zero console errors, zero pageerrors — no ObligationsHUD import errors, no DiplomacyPouch useEffect errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_persistence.py",
+    "/app/backend/tests/test_kernel_diplomacy.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "kernel_api.py:_persist uses asyncio.get_event_loop() which is deprecated in Python 3.12+ (currently 3.11, fine); consider asyncio.get_running_loop() with a fallback for robustness.",
+    "kernel_api.py:_persist fire-and-forget task swallows exceptions — DAO save failures would be silent. Wrap the created task to log exceptions on completion.",
+    "kernel config.num_players=2 is silently upgraded to playerCount=3 by the kernel (openMatchLegacy). Not a bug in Emergent code but worth documenting for frontend — the '2 players' dropdown option in the lobby may set num_players=2 that becomes a 3-player game with 1 AI.",
+    "persistence.py.save_game stores host_meta.turn_due_at as a raw int (ms epoch); persistence.py.list_games_info projection doesn't include host_meta so restart re-hydration correctly picks up the deadline. Good.",
+    "server.py load_dotenv is imported inline via startup event and mongo persistence is enabled only when both MONGO_URL and DB_NAME are set — silent no-op otherwise. Consider logging a warning when persistence is disabled so ops can detect misconfiguration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_kernel_persistence.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "None (no auth)",
+  "seed_data_creation": "Each test class creates a fresh game via /api/create-game + /api/join-game; games persist in Mongo `games` collection with _id = game_id.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 4 iteration-4 deliverables verified end-to-end. test_kernel_persistence.py restarts the backend via `sudo supervisorctl restart backend` — takes ~10s to come back up. Kernel enforces min 3 players regardless of config.num_players. Use _mongo_doc(game_id) helper to inspect persisted docs directly. answer-incident and deliver-pact 400-return path proves route wiring; when actual incidents/pacts exist those endpoints will succeed with real IDs from /diplomacy/inbox/{player_id}."
+}

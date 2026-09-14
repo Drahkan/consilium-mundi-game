@@ -1,28 +1,34 @@
 """
-Lightweight MongoDB persistence layer for Consilium Mundi.
-- Uses UUID string IDs (no ObjectId in JSON)
-- Stores entire GameEngine snapshot per game in `games` collection
-- Provides lazy load on-demand when a game_id is requested but not in memory
+MongoDB persistence for Consilium Mundi.
 
-NOTE: This module intentionally avoids any URL/port hardcoding.
-It expects the caller to construct the AsyncIOMotorClient with os.environ['MONGO_URL'] and pass a DB handle.
+`engine` is the CLI `serialize` blob (the full kernel GameState including
+`turnSnapshots`). It is loaded back through CLI `load` — never rehydrated by
+hand and never a legacy view.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+
 
 class GameDAO:
     def __init__(self, db):
         self.db = db
         self.coll = db.games if db is not None else None
 
-    async def save_game(self, game_id: str, engine_dict: Dict[str, Any], players_index: List[Dict[str, Any]]):
+    async def save_game(
+        self,
+        game_id: str,
+        engine_blob: Dict[str, Any],
+        players_index: List[Dict[str, Any]],
+        host_meta: Optional[Dict[str, Any]] = None,
+    ):
         if self.coll is None:
             return
         doc = {
             "_id": game_id,
-            "engine": engine_dict,
+            "engine": engine_blob,
             "players_index": players_index,
+            "host_meta": host_meta or {},
             "updated_at": datetime.now(tz=timezone.utc).isoformat(),
         }
         await self.coll.replace_one({"_id": game_id}, doc, upsert=True)
@@ -35,15 +41,21 @@ class GameDAO:
     async def list_games_info(self) -> List[Dict[str, Any]]:
         if self.coll is None:
             return []
-        cursor = self.coll.find({}, {"engine.current_turn": 1, "engine.phase": 1, "engine.config.num_players": 1})
+        # Read kernel-shape fields: engine.turn and engine.options.playerCount
+        cursor = self.coll.find(
+            {},
+            {"engine.turn": 1, "engine.options.playerCount": 1, "engine.phase": 1, "engine.players": 1},
+        )
         results: List[Dict[str, Any]] = []
         async for doc in cursor:
-            eng = doc.get("engine", {})
+            eng = doc.get("engine", {}) or {}
+            opts = eng.get("options", {}) or {}
+            humans = [p for p in (eng.get("players") or []) if p.get("kind") == "human"]
             results.append({
                 "id": doc.get("_id"),
-                "players": len(eng.get("players", [])),
-                "max_players": (eng.get("config", {}) or {}).get("num_players"),
+                "players": len(humans),
+                "max_players": opts.get("playerCount"),
                 "phase": eng.get("phase"),
-                "turn": eng.get("current_turn"),
+                "turn": eng.get("turn"),
             })
         return results

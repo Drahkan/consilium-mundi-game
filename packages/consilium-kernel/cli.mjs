@@ -3036,6 +3036,12 @@ function visibleThreads(state, viewerId) {
     );
   });
 }
+function unreadCount(state, viewerId) {
+  return visibleThreads(state, viewerId).reduce(
+    (n, t) => n + t.messages.filter((m) => m.toPlayerId === viewerId && !m.read).length,
+    0
+  );
+}
 function legalTradeDestinations(state, playerId) {
   return state.systems.filter(
     (s) => s.ownerId !== playerId && s.neighbors.some((n) => state.systems.find((x) => x.id === n)?.ownerId === playerId)
@@ -3757,6 +3763,30 @@ function answerIncident(state, viewerId, incidentId, action, unless) {
 function deliverPact(state, playerId, pactId) {
   return schedulePactDelivery(state, playerId, pactId);
 }
+function inboxForPlayer(state, playerId) {
+  const threads = visibleThreads(state, playerId);
+  const pending = threads.flatMap(
+    (t) => t.messages.filter((m) => m.toPlayerId === playerId && (m.status === "open" || !m.status)).map((m) => ({
+      threadId: t.id,
+      message: m,
+      peerId: t.participants.find((id) => id !== playerId) ?? m.fromPlayerId
+    }))
+  );
+  return {
+    unread: unreadCount(state, playerId),
+    pending,
+    incidents: openIncidentsFor(state, playerId),
+    unsentPacts: unsentPactsFor(state, playerId),
+    promiseReports: (state.promiseReports ?? []).filter(
+      (r) => r.actorId === playerId || r.otherId === playerId
+    ),
+    alliances: (state.alliances ?? []).filter((a) => a.a === playerId || a.b === playerId),
+    legalTradeIds: legalTradeDestinations(state, playerId)
+  };
+}
+function tradeFrontierFor(state, senderId, recipientId) {
+  return tradeFrontier(state, senderId, recipientId);
+}
 function openMatch(args) {
   return createGame({
     options: args.options,
@@ -3774,6 +3804,30 @@ function claimSeat(state, civ, name) {
   slot.ready = false;
   state.updatedAt = Date.now();
   return slot;
+}
+
+// src/lib/game/persist.ts
+function hydrateGame(g) {
+  return {
+    ...g,
+    version: typeof g.version === "number" ? g.version : SAVE_VERSION,
+    destroyUpgrades: g.destroyUpgrades ?? [],
+    activeSabotage: g.activeSabotage ?? {},
+    sabotageUntilTurn: g.sabotageUntilTurn ?? {},
+    destabilized: g.destabilized ?? [],
+    counterEspionage: g.counterEspionage ?? [],
+    builds: g.builds ?? [],
+    trades: g.trades ?? [],
+    espionage: g.espionage ?? [],
+    threads: g.threads ?? [],
+    alliances: g.alliances ?? [],
+    pacts: g.pacts ?? [],
+    promiseReports: g.promiseReports ?? [],
+    allyIncidents: g.allyIncidents ?? [],
+    log: g.log ?? [],
+    archiveLog: g.archiveLog ?? [],
+    turnSnapshots: g.turnSnapshots ?? []
+  };
 }
 
 // src/lib/game/legacy.ts
@@ -4092,7 +4146,7 @@ function dispatch(req) {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 1 };
+      return { ok: true, error: null, pong: true, version: 2 };
     case "optionsForType":
       return {
         ok: true,
@@ -4334,6 +4388,51 @@ function dispatch(req) {
       const seat = claimSeat(state, civ ?? civs[0], String(req.name ?? "Commander"));
       if (!seat) return fail("No open seat.");
       return ok(state, { player: seat });
+    }
+    case "serialize": {
+      const state = requireState(req);
+      return { ok: true, error: null, version: state.version, blob: state };
+    }
+    case "load": {
+      const blob = req.blob ?? req.state;
+      if (!blob || !blob.systems || !blob.players) return fail("blob is not a GameState");
+      if (typeof blob.version === "number" && blob.version > SAVE_VERSION) {
+        return fail(`blob version ${blob.version} is newer than kernel ${SAVE_VERSION}`);
+      }
+      return ok(hydrateGame(blob));
+    }
+    case "inboxForPlayer": {
+      const state = requireState(req);
+      const playerId = String(req.viewerId ?? req.playerId ?? "");
+      if (!playerId) return fail("viewerId is required");
+      return {
+        ok: true,
+        error: null,
+        state,
+        inbox: inboxForPlayer(state, playerId)
+      };
+    }
+    case "legalTradeDestinations": {
+      const state = requireState(req);
+      return {
+        ok: true,
+        error: null,
+        state,
+        systemIds: legalTradeDestinations(state, String(req.playerId))
+      };
+    }
+    case "tradeFrontier": {
+      const state = requireState(req);
+      return {
+        ok: true,
+        error: null,
+        state,
+        systemIds: tradeFrontierFor(
+          state,
+          String(req.playerId ?? req.senderId),
+          String(req.toId ?? req.recipientId)
+        )
+      };
     }
     default:
       return fail(`unknown op: ${op}`);

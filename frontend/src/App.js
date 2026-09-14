@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import DiplomacyPouch from './DiplomacyPouch';
+import ObligationsHUD from './ObligationsHUD';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -3386,6 +3387,19 @@ function App() {
               reload={async () => {
                 await loadGameState(currentGame, currentPlayer);
                 await loadGamePlayers(currentGame);
+              }}
+            />
+          )}
+
+          {/* Obligations HUD — incident modal + unsent-pact banner */}
+          {gameState?.phase === 'activity' && currentGame && currentPlayer && (
+            <ObligationsHUD
+              apiBase={API_BASE}
+              gameId={currentGame}
+              me={currentPlayer}
+              gameState={gameState}
+              reload={async () => {
+                await loadGameState(currentGame, currentPlayer);
               }}
             />
           )}

@@ -1328,5 +1328,35 @@ class GameEngine:
 # HTTP routes now come from the TypeScript kernel.
 # GameEngine above is left for existing unit tests that construct it in-process.
 # Do not add new features to GameEngine.
-from kernel_api import mount_kernel
+from kernel_api import mount_kernel, set_dao
 mount_kernel(app)
+
+
+# ---- Mongo persistence wiring for kernel state ---------------------------
+# Engine blobs (CLI-serialize output including turnSnapshots) are stored via
+# persistence.GameDAO. `list_games_info` reads engine.turn and
+# engine.options.playerCount. Loading goes back through CLI `load`.
+@app.on_event("startup")
+async def _init_kernel_persistence():
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from persistence import GameDAO
+
+    mongo_url = os.environ.get("MONGO_URL")
+    db_name = os.environ.get("DB_NAME")
+    if not mongo_url or not db_name:
+        import logging
+        logging.getLogger("server").warning(
+            "kernel persistence disabled: MONGO_URL or DB_NAME is unset — games live only in memory"
+        )
+        return
+    app.state.mongo_client = AsyncIOMotorClient(mongo_url)
+    db = app.state.mongo_client[db_name]
+    app.state.game_dao = GameDAO(db)
+    set_dao(app.state.game_dao)
+
+
+@app.on_event("shutdown")
+async def _close_kernel_persistence():
+    client = getattr(app.state, "mongo_client", None)
+    if client is not None:
+        client.close()

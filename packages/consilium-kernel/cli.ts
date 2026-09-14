@@ -25,14 +25,19 @@ import {
   declineDispatch,
   deliverPact,
   denounce,
+  inboxForPlayer,
   markReady,
   markUnready,
   openMatch,
   resolveIfDue,
   sendDispatch,
   shouldResolve,
+  tradeFrontierFor,
   viewForPlayer,
 } from "./host";
+import { hydrateGame } from "./persist";
+import { SAVE_VERSION } from "./constants";
+import { legalTradeDestinations } from "./diplomacy";
 import {
   applyLegacyBuildOrders,
   applyLegacyFleetOrders,
@@ -69,7 +74,7 @@ function dispatch(req: Req): unknown {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 1 };
+      return { ok: true, error: null, pong: true, version: 2 };
     case "optionsForType":
       return {
         ok: true,
@@ -313,6 +318,51 @@ function dispatch(req: Req): unknown {
       const seat = claimSeat(state, civ ?? civs[0]!, String(req.name ?? "Commander"));
       if (!seat) return fail("No open seat.");
       return ok(state, { player: seat });
+    }
+    case "serialize": {
+      const state = requireState(req);
+      return { ok: true, error: null, version: state.version, blob: state };
+    }
+    case "load": {
+      const blob = (req.blob ?? req.state) as GameState | undefined;
+      if (!blob || !blob.systems || !blob.players) return fail("blob is not a GameState");
+      if (typeof blob.version === "number" && blob.version > SAVE_VERSION) {
+        return fail(`blob version ${blob.version} is newer than kernel ${SAVE_VERSION}`);
+      }
+      return ok(hydrateGame(blob));
+    }
+    case "inboxForPlayer": {
+      const state = requireState(req);
+      const playerId = String(req.viewerId ?? req.playerId ?? "");
+      if (!playerId) return fail("viewerId is required");
+      return {
+        ok: true,
+        error: null,
+        state,
+        inbox: inboxForPlayer(state, playerId),
+      };
+    }
+    case "legalTradeDestinations": {
+      const state = requireState(req);
+      return {
+        ok: true,
+        error: null,
+        state,
+        systemIds: legalTradeDestinations(state, String(req.playerId)),
+      };
+    }
+    case "tradeFrontier": {
+      const state = requireState(req);
+      return {
+        ok: true,
+        error: null,
+        state,
+        systemIds: tradeFrontierFor(
+          state,
+          String(req.playerId ?? req.senderId),
+          String(req.toId ?? req.recipientId),
+        ),
+      };
     }
     default:
       return fail(`unknown op: ${op}`);

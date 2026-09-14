@@ -30,16 +30,8 @@ import {
 import { runAi } from "./ai";
 import { resolveTurn } from "./resolve";
 import { visionOf, playerKnown } from "./vision";
-import {
-  acceptOffer,
-  counterOffer,
-  declineOffer,
-  denounceAlliance,
-  respondToIncident,
-  schedulePactDelivery,
-  sendThreadMessage,
-  visibleThreads,
-} from "./diplomacy";
+import { unreadCount, sendThreadMessage, visibleThreads, legalTradeDestinations, tradeFrontier, acceptOffer, counterOffer, declineOffer, denounceAlliance, respondToIncident, schedulePactDelivery } from "./diplomacy";
+import { openIncidentsFor, unsentPactsFor } from "./alliance";
 
 export function viewForPlayer(state: GameState, viewerId: string): GameState {
   const next = structuredClone(state);
@@ -257,6 +249,39 @@ export function answerIncident(
 
 export function deliverPact(state: GameState, playerId: string, pactId: string) {
   return schedulePactDelivery(state, playerId, pactId);
+}
+
+/** Pending pouch items for one admiralty. Hosting should surface these; do not re-filter. */
+export function inboxForPlayer(state: GameState, playerId: string) {
+  const threads = visibleThreads(state, playerId);
+  const pending = threads.flatMap((t) =>
+    t.messages
+      .filter((m) => m.toPlayerId === playerId && (m.status === "open" || !m.status))
+      .map((m) => ({
+        threadId: t.id,
+        message: m,
+        peerId: t.participants.find((id) => id !== playerId) ?? m.fromPlayerId,
+      })),
+  );
+  return {
+    unread: unreadCount(state, playerId),
+    pending,
+    incidents: openIncidentsFor(state, playerId),
+    unsentPacts: unsentPactsFor(state, playerId),
+    promiseReports: (state.promiseReports ?? []).filter(
+      (r) => r.actorId === playerId || r.otherId === playerId,
+    ),
+    alliances: (state.alliances ?? []).filter((a) => a.a === playerId || a.b === playerId),
+    legalTradeIds: legalTradeDestinations(state, playerId),
+  };
+}
+
+export function tradeFrontierFor(
+  state: GameState,
+  senderId: string,
+  recipientId: string,
+) {
+  return tradeFrontier(state, senderId, recipientId);
 }
 
 export function openMatch(args: {

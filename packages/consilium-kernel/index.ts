@@ -9,5 +9,6 @@ export * from "./vision";
 export * from "./victory";
 export * from "./host";
 export * from "./snapshot";
+export { hydrateGame } from "./persist";
 export { generateMap, spawnStartingFleets, randomSeed } from "./mapgen";
 export { runAi } from "./ai";
