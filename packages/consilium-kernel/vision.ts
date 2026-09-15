@@ -1,9 +1,16 @@
 import type { GameState, StarSystem } from "./types";
+import { alliesOf, areAllied } from "./alliance";
 
 export type Vision = "visible" | "fog" | "hidden";
 
 /** Neutral ink for systems nobody is collecting from. Never an empire colour. */
 export const UNOWNED_INK = "#5c616a";
+
+function ownsOrAllyOwns(state: GameState, viewerId: string, ownerId: string | null): boolean {
+  if (!ownerId) return false;
+  if (ownerId === viewerId) return true;
+  return alliesOf(state, viewerId).includes(ownerId);
+}
 
 export function visionOf(
   state: GameState,
@@ -15,10 +22,10 @@ export function visionOf(
   if (state.options.uncharted && !p.discoveredSystemIds.includes(system.id)) {
     return "hidden";
   }
-  if (system.ownerId === viewerId) return "visible";
+  if (ownsOrAllyOwns(state, viewerId, system.ownerId)) return "visible";
   const adjOwned = system.neighbors.some((n) => {
     const s = state.systems.find((x) => x.id === n);
-    return s?.ownerId === viewerId;
+    return ownsOrAllyOwns(state, viewerId, s?.ownerId ?? null);
   });
   if (state.options.fogOfWar && !adjOwned) return "fog";
   return "visible";
@@ -29,6 +36,8 @@ export function playerKnown(
   viewerId: string,
   otherId: string,
 ): boolean {
+  if (viewerId === otherId) return true;
+  if (areAllied(state, viewerId, otherId)) return true;
   if (!state.options.uncharted) return true;
   const p = state.players.find((x) => x.id === viewerId);
   return !!p?.discoveredPlayerIds.includes(otherId);

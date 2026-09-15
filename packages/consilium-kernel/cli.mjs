@@ -1343,6 +1343,9 @@ function areAllied(state, a, b) {
   const [x, y] = pair(a, b);
   return (state.alliances ?? []).some((al) => al.a === x && al.b === y);
 }
+function alliesOf(state, playerId) {
+  return (state.alliances ?? []).filter((al) => al.a === playerId || al.b === playerId).map((al) => al.a === playerId ? al.b : al.a);
+}
 function formAlliance(state, aId, bId) {
   if (aId === bId || areAllied(state, aId, bId)) return false;
   const [a, b] = pair(aId, bId);
@@ -3592,21 +3595,28 @@ function resign(state, playerId) {
 }
 
 // src/lib/game/vision.ts
+function ownsOrAllyOwns(state, viewerId, ownerId) {
+  if (!ownerId) return false;
+  if (ownerId === viewerId) return true;
+  return alliesOf(state, viewerId).includes(ownerId);
+}
 function visionOf(state, viewerId, system) {
   const p = state.players.find((x) => x.id === viewerId);
   if (!p) return "hidden";
   if (state.options.uncharted && !p.discoveredSystemIds.includes(system.id)) {
     return "hidden";
   }
-  if (system.ownerId === viewerId) return "visible";
+  if (ownsOrAllyOwns(state, viewerId, system.ownerId)) return "visible";
   const adjOwned = system.neighbors.some((n) => {
     const s = state.systems.find((x) => x.id === n);
-    return s?.ownerId === viewerId;
+    return ownsOrAllyOwns(state, viewerId, s?.ownerId ?? null);
   });
   if (state.options.fogOfWar && !adjOwned) return "fog";
   return "visible";
 }
 function playerKnown(state, viewerId, otherId) {
+  if (viewerId === otherId) return true;
+  if (areAllied(state, viewerId, otherId)) return true;
   if (!state.options.uncharted) return true;
   const p = state.players.find((x) => x.id === viewerId);
   return !!p?.discoveredPlayerIds.includes(otherId);
@@ -3772,15 +3782,26 @@ function inboxForPlayer(state, playerId) {
       peerId: t.participants.find((id) => id !== playerId) ?? m.fromPlayerId
     }))
   );
+  const owed = unsentPactsFor(state, playerId);
   return {
     unread: unreadCount(state, playerId),
     pending,
     incidents: openIncidentsFor(state, playerId),
-    unsentPacts: unsentPactsFor(state, playerId),
+    unsentPacts: owed,
+    owedDeliveries: owed.map((p) => {
+      const half = pactHalf(p, playerId);
+      return {
+        pactId: p.id,
+        resources: half.resources,
+        systemId: half.systemId,
+        otherId: half.otherId
+      };
+    }),
     promiseReports: (state.promiseReports ?? []).filter(
       (r) => r.actorId === playerId || r.otherId === playerId
     ),
     alliances: (state.alliances ?? []).filter((a) => a.a === playerId || a.b === playerId),
+    allyIds: alliesOf(state, playerId),
     legalTradeIds: legalTradeDestinations(state, playerId)
   };
 }
@@ -4146,7 +4167,7 @@ function dispatch(req) {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 2 };
+      return { ok: true, error: null, pong: true, version: 3 };
     case "optionsForType":
       return {
         ok: true,

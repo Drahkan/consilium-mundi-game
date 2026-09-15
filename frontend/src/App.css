@@ -1159,3 +1159,14 @@ body {
   background: #020617; color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.35);
   font-size: 12px; text-transform: none; letter-spacing: normal;
 }
+
+/* Shared-sight chip per ui-reference/SHARED_SIGHT.md.
+   Sits below the top bar on the same edge as the turn counter. */
+.shared-sight-chip {
+  position: fixed; top: 68px; right: 20px; z-index: 40;
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #bae6fd; font-size: 11px; letter-spacing: 0.06em;
+  text-transform: none;
+}

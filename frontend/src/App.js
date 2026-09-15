@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import DiplomacyPouch from './DiplomacyPouch';
 import ObligationsHUD from './ObligationsHUD';
+import ResourceHUD from './ResourceHUD';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -40,7 +41,8 @@ function App() {
   // Multi-player lobby state
   const [landingMode, setLandingMode] = useState('create'); // 'create' | 'join'
   const [joinGameId, setJoinGameId] = useState('');
-  const [numPlayersConfig, setNumPlayersConfig] = useState(2);
+  const [numPlayersConfig, setNumPlayersConfig] = useState(3);
+  const [sharedSightAllyIds, setSharedSightAllyIds] = useState([]);
   const [turnSecondsConfig, setTurnSecondsConfig] = useState(300); // 5 min default
   const [fowModeConfig, setFowModeConfig] = useState('basic'); // 'off' | 'basic'
   const [copiedFlag, setCopiedFlag] = useState(false);
@@ -3110,9 +3112,8 @@ function App() {
                     className="player-name-input"
                     data-testid="landing-num-players"
                   >
-                    <option value={2}>2 players</option>
-                    <option value={3}>3 players</option>
-                    <option value={4}>4 players</option>
+                    <option value={3}>3–4 admiralties (open seats fill with AI)</option>
+                    <option value={4}>4 admiralties</option>
                   </select>
                   <label style={{ display: 'block', textAlign: 'left', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0.75rem 0 0.25rem 2px' }}>
                     Turn timer (auto-resolves at zero)
@@ -3194,11 +3195,7 @@ function App() {
             <h2>Consilium Mundi</h2>
             <span className="turn-info">
               Turn {gameState?.turn} - {gameState?.phase}
-              {gameState?.player_resources && (
-                <span className="resources-info">
-                  | T:{gameState.player_resources.tech} M:{gameState.player_resources.metals} C:{gameState.player_resources.chon}
-                </span>
-              )}
+              <ResourceHUD resources={gameState?.player_resources} />
             </span>
             {secondsRemaining !== null && gameState?.phase === 'activity' && (() => {
               const mm = String(Math.floor(secondsRemaining / 60)).padStart(2, '0');
@@ -3391,7 +3388,8 @@ function App() {
             />
           )}
 
-          {/* Obligations HUD — incident modal + unsent-pact banner */}
+          {/* Obligations HUD — incident modal + unsent-pact banner.
+              Emits inbox → sets sharedSightAllyIds for the chip below. */}
           {gameState?.phase === 'activity' && currentGame && currentPlayer && (
             <ObligationsHUD
               apiBase={API_BASE}
@@ -3401,7 +3399,21 @@ function App() {
               reload={async () => {
                 await loadGameState(currentGame, currentPlayer);
               }}
+              onInbox={(inbox) => setSharedSightAllyIds(inbox.allyIds || [])}
             />
+          )}
+
+          {/* Shared-sight chip per ui-reference/SHARED_SIGHT.md.
+              Kernel v3 fogs correctly — this HUD line is the only chrome. */}
+          {gameState?.phase === 'activity' && sharedSightAllyIds.length > 0 && (
+            <div className="shared-sight-chip" data-testid="shared-sight-chip">
+              Shared sight: {sharedSightAllyIds
+                .map((pid) => {
+                  const kp = (gameState?.kernel?.players || []).find((p) => p.id === pid);
+                  return kp?.civ?.name || (availablePlayers || []).find((p) => p.id === pid)?.name || pid;
+                })
+                .join(', ')}
+            </div>
           )}
           
           <div className="galaxy-section">

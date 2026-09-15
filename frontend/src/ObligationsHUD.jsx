@@ -4,8 +4,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 // per ui-reference/OBLIGATIONS.md.
 //
 // Pull-based: after each state fetch we poll the kernel inbox for the current
-// player. If there is an open incident we surface a modal (answerIncident);
-// if there are pacts owed we surface a banner (deliverPact).
+// player. `inbox.owedDeliveries` is the source of truth for the unsent-pact
+// banner — the kernel already resolved which half of the pact this viewer
+// owes (`{ pactId, resources, systemId, otherId }`). If there is an open
+// incident we surface a modal (answerIncident).
+//
+// We also emit `onInbox(inbox)` so App.js can render the shared-sight chip
+// from `inbox.allyIds` per ui-reference/SHARED_SIGHT.md.
 
 const RES_LABEL = { tech: 'Tech', metals: 'Metals', chon: 'CHON' };
 
@@ -17,15 +22,18 @@ function formatRes(r) {
   return parts.length ? parts.join(', ') : 'nothing';
 }
 
-function pactHalf(pact, meId) {
-  if (!pact) return null;
-  if (pact.a?.playerId === meId) return pact.a;
-  if (pact.b?.playerId === meId) return pact.b;
-  return null;
+function nonEmptyResources(r) {
+  return !!r && (['tech', 'metals', 'chon'].some((k) => (r[k] || 0) > 0));
 }
 
-export default function ObligationsHUD({ apiBase, gameId, me, gameState, reload, pollMs = 8000 }) {
-  const [inbox, setInbox] = useState({ pending: [], incidents: [], unsentPacts: [] });
+export default function ObligationsHUD({ apiBase, gameId, me, gameState, reload, onInbox, pollMs = 8000 }) {
+  const [inbox, setInbox] = useState({
+    pending: [],
+    incidents: [],
+    unsentPacts: [],
+    owedDeliveries: [],
+    allyIds: [],
+  });
   const [openIncidentId, setOpenIncidentId] = useState(null);
   const [deferred, setDeferred] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -41,11 +49,19 @@ export default function ObligationsHUD({ apiBase, gameId, me, gameState, reload,
       const r = await fetch(`${apiBase}/api/game/${gameId}/diplomacy/inbox/${encodeURIComponent(me)}`);
       if (!r.ok) return;
       const d = await r.json();
-      setInbox(d || { pending: [], incidents: [], unsentPacts: [] });
+      const normalized = {
+        pending: d.pending || [],
+        incidents: d.incidents || [],
+        unsentPacts: d.unsentPacts || [],
+        owedDeliveries: d.owedDeliveries || [],
+        allyIds: d.allyIds || [],
+      };
+      setInbox(normalized);
+      if (onInbox) onInbox(normalized);
     } catch (_) {
       /* transient */
     }
-  }, [apiBase, gameId, me]);
+  }, [apiBase, gameId, me, onInbox]);
 
   useEffect(() => { refresh(); }, [refresh, gameState?.turn, gameState?.phase]);
   useEffect(() => {
@@ -85,27 +101,25 @@ export default function ObligationsHUD({ apiBase, gameId, me, gameState, reload,
     });
 
   const openInc = (inbox.incidents || []).find((i) => i.id === openIncidentId);
-  const owedPacts = (inbox.unsentPacts || []).filter((p) => {
-    const half = pactHalf(p, me);
-    return half && ((half.resources?.tech || 0) + (half.resources?.metals || 0) + (half.resources?.chon || 0)) > 0;
-  });
+  // Kernel v3: `owedDeliveries` already contains only what this viewer owes.
+  // Each item is { pactId, resources, systemId, otherId }.
+  const owed = (inbox.owedDeliveries || []).filter((d) => nonEmptyResources(d.resources));
 
   return (
     <>
-      {owedPacts.length > 0 && (
+      {owed.length > 0 && (
         <div className="obligations-banner-wrap" data-testid="unsent-pact-banner">
-          {owedPacts.map((p) => {
-            const half = pactHalf(p, me);
-            const dest = systems[half.systemId]?.name || 'the named system';
+          {owed.map((d) => {
+            const dest = systems[d.systemId]?.name || 'the named system';
             return (
-              <div key={p.id} className="obligations-pact-row">
+              <div key={d.pactId} className="obligations-pact-row" data-testid={`unsent-pact-row-${d.pactId}`}>
                 <span>
-                  You promised {formatRes(half.resources)} to <b>{dest}</b>. Accepting did not send it.
+                  You promised {formatRes(d.resources)} to <b>{dest}</b>. Accepting did not send it.
                 </span>
                 <button
-                  data-testid={`unsent-pact-deliver-${p.id}`}
+                  data-testid={`unsent-pact-deliver-${d.pactId}`}
                   disabled={busy}
-                  onClick={() => post('deliver-pact', { pact_id: p.id })}
+                  onClick={() => post('deliver-pact', { pact_id: d.pactId })}
                 >
                   Schedule delivery
                 </button>

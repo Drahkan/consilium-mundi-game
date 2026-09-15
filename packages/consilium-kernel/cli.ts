@@ -74,7 +74,7 @@ function dispatch(req: Req): unknown {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 2 };
+      return { ok: true, error: null, pong: true, version: 3 };
     case "optionsForType":
       return {
         ok: true,

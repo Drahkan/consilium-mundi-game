@@ -554,6 +554,8 @@ def mount_kernel(app: FastAPI) -> None:
             "pending": inbox.get("pending") or [],
             "incidents": inbox.get("incidents") or [],
             "unsentPacts": inbox.get("unsentPacts") or [],
+            "owedDeliveries": inbox.get("owedDeliveries") or [],
+            "allyIds": inbox.get("allyIds") or [],
         }
 
     @app.get("/api/game/{game_id}/diplomacy/frontier")

@@ -31,7 +31,7 @@ import { runAi } from "./ai";
 import { resolveTurn } from "./resolve";
 import { visionOf, playerKnown } from "./vision";
 import { unreadCount, sendThreadMessage, visibleThreads, legalTradeDestinations, tradeFrontier, acceptOffer, counterOffer, declineOffer, denounceAlliance, respondToIncident, schedulePactDelivery } from "./diplomacy";
-import { openIncidentsFor, unsentPactsFor } from "./alliance";
+import { openIncidentsFor, unsentPactsFor, pactHalf, alliesOf } from "./alliance";
 
 export function viewForPlayer(state: GameState, viewerId: string): GameState {
   const next = structuredClone(state);
@@ -263,15 +263,26 @@ export function inboxForPlayer(state: GameState, playerId: string) {
         peerId: t.participants.find((id) => id !== playerId) ?? m.fromPlayerId,
       })),
   );
+  const owed = unsentPactsFor(state, playerId);
   return {
     unread: unreadCount(state, playerId),
     pending,
     incidents: openIncidentsFor(state, playerId),
-    unsentPacts: unsentPactsFor(state, playerId),
+    unsentPacts: owed,
+    owedDeliveries: owed.map((p) => {
+      const half = pactHalf(p, playerId)!;
+      return {
+        pactId: p.id,
+        resources: half.resources,
+        systemId: half.systemId,
+        otherId: half.otherId,
+      };
+    }),
     promiseReports: (state.promiseReports ?? []).filter(
       (r) => r.actorId === playerId || r.otherId === playerId,
     ),
     alliances: (state.alliances ?? []).filter((a) => a.a === playerId || a.b === playerId),
+    allyIds: alliesOf(state, playerId),
     legalTradeIds: legalTradeDestinations(state, playerId),
   };
 }
