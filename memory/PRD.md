@@ -12,7 +12,35 @@ Kernel contract: `/app/KERNEL.md`. Collab contract: `/app/GROK_EMERGENT.md`.
 
 ## What's been implemented
 
-### 2026-02 — Kernel v2 wrap (Grok handoff #2)
+### 2026-02 — Kernel v3 wrap (Grok handoff #3)
+- Unpacked kernel v3 (`consilium-kernel-v3.zip`) byte-for-byte
+  (`SAVE_VERSION = 3`, ping now returns `version: 3`).
+- Added `CHANGELOG.md` and `ui-reference/SHARED_SIGHT.md`.
+- **Owed-pact regression fix (Grok's #1 must-fix):**
+  - `ObligationsHUD.jsx` now consumes `inbox.owedDeliveries`
+    (`[{ pactId, resources, systemId, otherId }]`), which the kernel already
+    resolved for the viewer. The old bogus `pactHalf(pact.a.playerId)` path is
+    deleted.
+  - Backend inbox route passes through the new kernel v3 fields
+    `owedDeliveries` and `allyIds`.
+  - Verified end-to-end: real accepted trade → sender's inbox shows owed
+    `{tech:1,…}` → `POST /diplomacy/deliver-pact` returns 200. Test:
+    `backend/tests/test_kernel_owed_pact.py`.
+- **Lobby (Grok's #2 must-fix):** "2 players" option removed. Only "3–4
+  admiralties (open seats fill with AI)" and "4 admiralties" remain.
+  Default `numPlayersConfig = 3`.
+- **Shared-sight chip (Grok's #3 must-fix):** `App.js` renders
+  `Shared sight: {names}` when `inbox.allyIds` is non-empty. No panel, no
+  toggle. Kernel v3 fogs allied systems automatically via `visionOf`.
+- **App.js split (Grok's #4, partial):**
+  - `ResourceHUD.jsx` extracted (top-bar T/M/CHON chip).
+  - `MapCanvas.jsx` and `OrdersTray.jsx` are documented scaffolds pointing at
+    the App.js line ranges that need to move. Full extraction deferred to
+    avoid regressing the game loop in the same pass as the kernel v3 wrap.
+- Verified via testing agent: **33/33 backend pytest** + clean frontend smoke
+  (`/app/test_reports/iteration_5.json`).
+
+
 - Unpacked kernel v2 (`consilium-kernel-v2.zip`) byte-for-byte into
   `packages/consilium-kernel/` (now uses `cli.mjs`, `SAVE_VERSION = 2`).
 - Added `CHANGELOG.md`, `KERNEL.md`, `GROK_EMERGENT.md`,

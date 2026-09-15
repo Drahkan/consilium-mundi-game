@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 5 — verified kernel v3 wrap end-to-end, focusing on Grok's must-fix owed-pact regression. Backend: 33/33 pytest pass (11 new in test_kernel_owed_pact.py + 22 regression across test_kernel_diplomacy.py and test_kernel_persistence.py). NEW E2E OWED-PACT FLOW proven with a real accepted trade: (1) 2-human + 1-AI game via create-game + join-game + /start; (2) inbox response shape confirmed to include kernel v3 fields `owedDeliveries` and `allyIds` (all arrays); (3) Alice POSTs /diplomacy/send trade {give: tech:1, request: chon:1} to Bob with valid giveSystemId/requestSystemId picked from tradeFrontier-eligible landing systems; (4) Bob POSTs /diplomacy/accept on the open message; (5) GET /diplomacy/inbox/{alice} returns owedDeliveries=[{pactId, resources:{tech:1,...}, systemId, otherId:bob}] — non-empty, real resources, matching Grok's spec exactly; (6) symmetric check: Bob's inbox also shows owed chon:1; (7) POST /diplomacy/deliver-pact with the real pactId returns 200 status:ok (this is the previously-untested happy path Grok flagged); (8) bogus pact_id still returns 400 with kernel-derived detail; (9) after deliver, Alice's owed row is cleared/removed; (10) kernel CLI ping returns {ok:true,pong:true,version:3}; (11) persistence roundtrip regression: create → GET state → `sudo supervisorctl restart backend` → re-GET state shows same system IDs. Frontend: root URL loads Consilium Mundi lobby with ZERO console errors and ZERO page errors. Lobby dropdown [data-testid=landing-num-players] has EXACTLY two options — value=3 '3–4 admiralties (open seats fill with AI)' and value=4 '4 admiralties'. No '2 players' string present. No import errors for MapCanvas/OrdersTray/ResourceHUD.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_owed_pact.py",
+    "/app/backend/tests/test_kernel_diplomacy.py",
+    "/app/backend/tests/test_kernel_persistence.py",
+    "/app/test_reports/pytest/iter5.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ObligationsHUD.jsx correctly consumes inbox.owedDeliveries and filters via nonEmptyResources — the pact.a.playerId bug Grok flagged is fully gone.",
+    "kernel_api.py inbox route (line 548-559) passes through owedDeliveries + allyIds cleanly; contract with host.ts::inboxForPlayer is aligned.",
+    "MapCanvas.jsx and OrdersTray.jsx are honest scaffolds that return null with TODO comments — safe placeholders, no runtime impact. App.js still owns renderGalaxyMap/renderOrdersPanel until the follow-up split.",
+    "ResourceHUD.jsx is a clean 14-line extraction with proper null-guard; App.js consumes it via the top-bar (resource-hud testid).",
+    "Persistence path (_persist -> asyncio.get_running_loop -> create_task) already logs DAO errors — no regression from iter 4."
+  ],
+  "updated_files": ["/app/backend/tests/test_kernel_owed_pact.py"],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "100%"},
+  "test_credentials": "None (no auth)",
+  "seed_data_creation": "test_kernel_owed_pact.py creates one 2-human+1-AI game per class run; state discarded after tests. Persistence test triggers `sudo supervisorctl restart backend` and waits for it to come back up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Grok's must-fix regression is resolved and proven. The critical E2E is in /app/backend/tests/test_kernel_owed_pact.py::TestOwedPactE2E — sends a real trade, accepts it, verifies owedDeliveries populated with real resources ({tech:1}), and delivers the pact via HTTP with a 200 response. This is the 'accepted trade showing the unsent-pact banner with real goods' Grok explicitly asked for. Frontend ObligationsHUD.jsx maps this same inbox.owedDeliveries into the banner with data-testid=unsent-pact-banner and per-row deliver button unsent-pact-deliver-{pactId}. Lobby dropdown is confirmed to have only values 3 and 4."
+}
