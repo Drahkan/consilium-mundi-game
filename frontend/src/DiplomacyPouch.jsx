@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 // Templated diplomacy pouch — ported from ui-reference/diplomacy-modal.tsx.
 // No free-text chat: every dispatch is a structured, templated offer. Trade
@@ -100,7 +101,9 @@ export default function DiplomacyPouch({ apiBase, gameId, me, gameState, players
       });
       if (!resp.ok) {
         const e = await resp.json().catch(() => ({}));
-        throw new Error(e.detail || 'Diplomatic action failed');
+        const detail = e.detail || e.error || 'Diplomatic action failed';
+        toast.error(String(detail));
+        throw new Error(detail);
       }
       await reload();
       return true;

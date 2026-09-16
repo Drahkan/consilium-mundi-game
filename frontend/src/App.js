@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Toaster } from 'sonner';
 import './App.css';
 import DiplomacyPouch from './DiplomacyPouch';
 import ObligationsHUD from './ObligationsHUD';
@@ -6,6 +7,10 @@ import ResourceHUD from './ResourceHUD';
 import MapCanvas from './MapCanvas';
 import OrdersTray from './OrdersTray';
 import TurnRecap from './TurnRecap';
+import useTurnTimer from './hooks/useTurnTimer';
+import useTurnRecap from './hooks/useTurnRecap';
+import useDiplomacyPouch from './hooks/useDiplomacyPouch';
+import { kernelPost } from './lib/kernelPost';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -33,7 +38,6 @@ function App() {
   const [playerBuildOrders, setPlayerBuildOrders] = useState({}); // Per-player build orders
   const [showBuildPanel, setShowBuildPanel] = useState(false);
   const [showCombatReports, setShowCombatReports] = useState(false);
-  const [showDiplomacy, setShowDiplomacy] = useState(false);
   const [combatReportsExpanded, setCombatReportsExpanded] = useState({});
   const [seenCombatTurns, setSeenCombatTurns] = useState(new Set());
   const [showOrderSummary, setShowOrderSummary] = useState(false);
@@ -49,17 +53,10 @@ function App() {
   // Espionage (kernel v4) — queue of pending espionage orders for this
   // admiralty. Each item mirrors the kernel `applyEspionage` args.
   const [espionageQueue, setEspionageQueue] = useState([]);
-  // Turn recap (kernel v4) — payload from GET /api/game/{id}/recap fetched
-  // whenever the turn number advances. Shown once per resolution.
-  const [turnRecap, setTurnRecap] = useState(null);
-  const [lastRecapTurn, setLastRecapTurn] = useState(0);
   const [turnSecondsConfig, setTurnSecondsConfig] = useState(300); // 5 min default
   const [fowModeConfig, setFowModeConfig] = useState('basic'); // 'off' | 'basic'
   const [copiedFlag, setCopiedFlag] = useState(false);
-  const [secondsRemaining, setSecondsRemaining] = useState(null);
   const lobbyPollRef = useRef(null);
-  const timerTickRef = useRef(null);
-  const autoResolveFiredRef = useRef({}); // { turnNumber: true }
   
   // Map navigation state
   const [mapZoom, setMapZoom] = useState(1);
@@ -120,70 +117,18 @@ function App() {
   // Turn countdown: ticks once per second, computes remaining seconds from the
   // server-authoritative deadline (accounts for clock drift and page refreshes).
   // When it hits zero, the "host" (first player in the roster) auto-fires the
+  // useTurnTimer / useTurnRecap / useDiplomacyPouch — kernel v5 hook split.
+  const { secondsRemaining } = useTurnTimer({ gameState, availablePlayers, currentPlayer, resolveTurn: () => resolveTurn() });
+  const { turnRecap, setTurnRecap } = useTurnRecap({ apiBase: API_BASE, gameId: currentGame, playerId: currentPlayer, turn: gameState?.turn });
+  const { showDiplomacy, openDiplomacy, closeDiplomacy, reload: reloadPouch } = useDiplomacyPouch({
+    reloadGameState: () => loadGameState(currentGame, currentPlayer),
+    reloadPlayers: () => loadGamePlayers(currentGame),
+  });
+
   // resolve-turn endpoint. Ref guard ensures we only fire once per turn.
-  useEffect(() => {
-    if (timerTickRef.current) clearInterval(timerTickRef.current);
-    if (!gameState || gameState.phase !== 'activity' || gameState.game_over) {
-      setSecondsRemaining(null);
-      return undefined;
-    }
-    // Paused: show the frozen "remaining" value; no auto-resolve.
-    if (gameState.turn_paused) {
-      setSecondsRemaining(gameState.turn_paused_remaining || 0);
-      return undefined;
-    }
-    if (!gameState.turn_deadline) {
-      setSecondsRemaining(null);
-      return undefined;
-    }
-    const deadlineMs = new Date(gameState.turn_deadline).getTime();
-    const tick = () => {
-      const remaining = Math.max(0, Math.round((deadlineMs - Date.now()) / 1000));
-      setSecondsRemaining(remaining);
-      if (remaining <= 0) {
-        // Only the host issues resolve to avoid duplicate calls from N browsers
-        const isHost = availablePlayers.length > 0 && availablePlayers[0].id === currentPlayer;
-        const turnKey = String(gameState.turn);
-        if (isHost && !autoResolveFiredRef.current[turnKey]) {
-          autoResolveFiredRef.current[turnKey] = true;
-          resolveTurn();
-        }
-      }
-    };
-    tick();
-    timerTickRef.current = setInterval(tick, 1000);
-    return () => {
-      if (timerTickRef.current) {
-        clearInterval(timerTickRef.current);
-        timerTickRef.current = null;
-      }
-    };
-  }, [gameState?.turn_deadline, gameState?.phase, gameState?.turn, gameState?.turn_paused, gameState?.turn_paused_remaining, availablePlayers, currentPlayer]);
 
   // Turn recap (kernel v4). Fetch when the turn number advances so the
   // player sees log + promiseReports for the resolution that just landed.
-  useEffect(() => {
-    const t = gameState?.turn;
-    if (!currentGame || !currentPlayer || !t) return;
-    if (t <= 1) return;
-    if (t === lastRecapTurn) return;
-    let alive = true;
-    (async () => {
-      try {
-        const r = await fetch(
-          `${API_BASE}/api/game/${currentGame}/recap?player_id=${encodeURIComponent(currentPlayer)}`
-        );
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!alive) return;
-        setTurnRecap(d);
-        setLastRecapTurn(t);
-      } catch (err) {
-        console.warn('recap fetch failed', err);
-      }
-    })();
-    return () => { alive = false; };
-  }, [gameState?.turn, currentGame, currentPlayer, lastRecapTurn]);
 
   // Replay auto-play tick. Advances one snapshot every 1.6s while
   // replayPlaying is true; stops (and auto-pauses) at the last frame.
@@ -401,7 +346,8 @@ function App() {
     setJoinGameId('');
     setLandingMode('create');
     setError(null);
-    autoResolveFiredRef.current = {};
+    // autoResolveFiredRef is now internal to useTurnTimer; the hook resets
+    // itself when gameState clears.
     setPendingRally({});
     setReplayData(null);
     setReplayTurnIdx(0);
@@ -993,16 +939,13 @@ function App() {
     };
     const nextQueue = [...espionageQueue, item];
     setEspionageQueue(nextQueue);
-    try {
-      const r = await fetch(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: currentPlayer, orders: nextQueue }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    } catch (err) {
-      console.warn('espionage POST failed', err);
-      // rollback local state on server rejection
+    // kernelPost surfaces the kernel error/detail string as a toast (kernel v5
+    // hosting task 3 — no silent rollback).
+    const res = await kernelPost(
+      `${API_BASE}/api/game/${currentGame}/espionage-orders`,
+      { player_id: currentPlayer, orders: nextQueue },
+    );
+    if (!res.ok) {
       setEspionageQueue(espionageQueue);
     }
   };
@@ -1011,15 +954,13 @@ function App() {
     const nextQueue = espionageQueue.filter((e) => e.id !== id);
     setEspionageQueue(nextQueue);
     if (!currentGame || !currentPlayer) return;
-    try {
-      const r = await fetch(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: currentPlayer, orders: nextQueue }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    } catch (err) {
-      console.warn('espionage cancel POST failed', err);
+    const res = await kernelPost(
+      `${API_BASE}/api/game/${currentGame}/espionage-orders`,
+      { player_id: currentPlayer, orders: nextQueue },
+    );
+    if (!res.ok) {
+      // roll back the cancel so the queue stays consistent with the server
+      setEspionageQueue(espionageQueue);
     }
   };
 
@@ -1763,7 +1704,6 @@ function App() {
                     className={`starfleet-item ${selectedStarfleet === starfleet.id ? 'selected' : ''}`}
                     onClick={() => setSelectedStarfleet(starfleet.id)}
                   >
-                    <p><strong>Owner:</strong> {getPlayerName(starfleet.owner)}</p>
                     {starfleet.orders && (
                       <p><strong>Orders:</strong> {starfleet.orders.type}</p>
                     )}
@@ -2558,6 +2498,7 @@ function App() {
 
   return (
     <div className="App">
+      <Toaster position="top-center" richColors closeButton />
       <div className="game-interface">
         {/* Header */}
         <div className="game-header">
@@ -2702,7 +2643,7 @@ function App() {
 
             {gameState?.phase === 'activity' && (
               <button
-                onClick={() => setShowDiplomacy(true)}
+                onClick={() => openDiplomacy()}
                 className="combat-reports-btn"
                 data-testid="header-diplomacy-btn"
                 title="Open the diplomatic pouch — templated offers, alliances, trades"
@@ -2750,11 +2691,8 @@ function App() {
               me={currentPlayer}
               gameState={gameState}
               playersMeta={availablePlayers}
-              onClose={() => setShowDiplomacy(false)}
-              reload={async () => {
-                await loadGameState(currentGame, currentPlayer);
-                await loadGamePlayers(currentGame);
-              }}
+              onClose={() => closeDiplomacy()}
+              reload={reloadPouch}
             />
           )}
 
@@ -2797,7 +2735,7 @@ function App() {
                 return kp?.civ?.name || (availablePlayers || []).find((p) => p.id === pid)?.name || pid;
               }}
               onClose={() => setTurnRecap(null)}
-              onOpenDiplomacy={() => { setTurnRecap(null); setShowDiplomacy(true); }}
+              onOpenDiplomacy={() => { setTurnRecap(null); openDiplomacy(); }}
             />
           )}
           

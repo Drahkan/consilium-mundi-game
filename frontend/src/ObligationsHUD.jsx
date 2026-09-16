@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 // Ported from ui-reference/play-screen.tsx (IncidentDialog + unsent-pact banner)
 // per ui-reference/OBLIGATIONS.md.
@@ -86,7 +87,8 @@ export default function ObligationsHUD({ apiBase, gameId, me, gameState, reload,
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        console.warn('obligations op failed', action, err);
+        const detail = err?.detail || err?.error || `Diplomacy op failed (${r.status})`;
+        toast.error(String(detail));
       }
       await refresh();
       if (reload) await reload();
