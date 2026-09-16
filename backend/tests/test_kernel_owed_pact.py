@@ -38,7 +38,7 @@ def test_kernel_ping_v3():
     data = json.loads(r.stdout.strip().splitlines()[-1])
     assert data.get("ok") is True
     assert data.get("pong") is True
-    assert data.get("version") in (3, 4), f"expected v3+, got {data}"
+    assert data.get("version") in (3, 4, 5), f"expected v3+, got {data}"
 
 
 # ---- helpers ----

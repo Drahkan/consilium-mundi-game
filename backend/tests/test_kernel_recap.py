@@ -27,8 +27,8 @@ if not BASE_URL:
 API = f"{BASE_URL}/api"
 
 
-def test_kernel_ping_v4():
-    """CLI ping now reports version 4."""
+def test_kernel_ping_v5():
+    """CLI ping now reports version 5."""
     p = subprocess.run(
         ["node", "/app/packages/consilium-kernel/cli.mjs"],
         input='{"op":"ping"}',
@@ -38,7 +38,7 @@ def test_kernel_ping_v4():
     data = json.loads(p.stdout.strip().splitlines()[-1])
     assert data.get("ok") is True
     assert data.get("pong") is True
-    assert data.get("version") == 4
+    assert data.get("version") == 5
 
 
 def test_save_version_unchanged():
@@ -123,3 +123,45 @@ class TestRecapEndpoint:
         # must contain systems/players/turn
         for k in ["systems", "players", "turn"]:
             assert k in snap, f"snapshot missing {k}; got {list(snap.keys())}"
+        # v5: snapshot.players must be a non-empty list with {id,name,civName,colors}
+        players = snap["players"]
+        assert isinstance(players, list) and len(players) >= 3, (
+            f"snapshot.players must be non-empty list of >=3, got {players!r}"
+        )
+        for p in players:
+            for field in ("id", "name", "civName", "colors"):
+                assert field in p, f"player missing {field}: keys={list(p.keys())}"
+        # v5: top-level recap.players must ALSO be a non-empty list w/ same shape
+        top_players = recap.get("players")
+        assert isinstance(top_players, list) and len(top_players) >= 3, (
+            f"recap.players (top-level) must be non-empty list, got {top_players!r}"
+        )
+        for p in top_players:
+            for field in ("id", "name", "civName", "colors"):
+                assert field in p, f"top-level player missing {field}: keys={list(p.keys())}"
+
+    def test_06_overlay_after_backend_restart(self):
+        """Kernel v5 should overlay snapshot.players from live state
+        even for games hydrated from Mongo (old-blob overlay)."""
+        gid = TestRecapEndpoint.ctx["gid"]
+        pid = TestRecapEndpoint.ctx["pid"]
+        subprocess.run(["sudo", "supervisorctl", "restart", "backend"],
+                       capture_output=True, text=True, timeout=30)
+        # wait for backend to come back
+        for _ in range(30):
+            try:
+                h = requests.get(f"{API}/", timeout=3)
+                if h.status_code < 500:
+                    break
+            except Exception:
+                pass
+            time.sleep(1)
+        r = requests.get(f"{API}/game/{gid}/recap",
+                        params={"player_id": pid}, timeout=15)
+        assert r.status_code == 200, r.text
+        recap = r.json()
+        snap = recap["snapshot"]
+        players = snap.get("players", [])
+        assert isinstance(players, list) and len(players) >= 3, (
+            f"post-restart snapshot.players must be non-empty, got {players!r}"
+        )

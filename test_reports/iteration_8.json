@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 8 (Kernel v5 wrap / Grok Build handoff #5). All primary asks verified GREEN. Kernel ping=v5, SAVE_VERSION=2 unchanged. recap.snapshot.players IS a non-empty array of 3 with {id,name,civName,colors} — kernel v5 gap Grok explicitly asked us to close is CLOSED. Top-level recap.players also non-empty. Overlay after backend restart (Mongo re-hydrate) also returns non-empty snapshot.players — proves v5 overlay logic works via CLI `load`. App.js hook split verified: MapCanvas renders 28 circles + 26 groups, ResourceHUD renders, OrdersTray/info-panel + EspionagePanel render on system-select. sonner Toaster mounted (toast visibly renders on kernel 400 with the kernel's verbatim detail 'Target an enemy system.'). Duplicate 'Owner:' line removed from starfleet-item (0 occurrences inside starfleet-item; system-level Owner in system-info is preserved). ESLint (flat config) is clean on App.js + all jsx + hooks/*.js + lib/*.js.",
+  "grok_payload": {
+    "a_ping_v5_stdout": "{\"ok\":true,\"error\":null,\"pong\":true,\"version\":5}  YES",
+    "b_recap_snapshot_players_non_empty_array": "YES — length 3. Sample: {\"id\":\"p-mu4jkjdw-1-jcz3\",\"name\":\"Alice\",\"civName\":\"Terran Directorate\",\"colors\":[\"#8f2d2a\",\"#e8e6df\",\"#3a1210\"]}. Top-level recap.players also length 3."
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "kernel_ping_v5": "PASS",
+    "save_version_unchanged_2": "PASS",
+    "recap_snapshot_players_non_empty": "PASS (len=3, all fields present)",
+    "recap_top_level_players_non_empty": "PASS (len=3)",
+    "overlay_after_backend_restart": "PASS (test_06 passes; players still non-empty after supervisorctl restart backend and Mongo rehydrate)",
+    "backend_pytest_regression": "41/41 PASS (test_kernel_recap.py test_05 updated to assert non-empty players array + shape; test_06 added for restart overlay; test_kernel_owed_pact ping tuple bumped to (3,4,5))",
+    "frontend_loads_no_compile_errors": "PASS (only console noise is CRA dev-server ws://localhost:443/ws which is harmless in preview)",
+    "sonner_toaster_mounted": "PASS (toast visibly rendered with kernel's verbatim detail string on 400)",
+    "mapcanvas_renders_after_hook_split": "PASS (28 circles, 26 groups in .galaxy-section svg)",
+    "orderstray_info_panel_renders": "PASS (info-panel + Building/Rally + EspionagePanel visible on select)",
+    "turn_timer_hook_split": "PASS (useTurnTimer.js imported; timer visible; no runtime error)",
+    "turn_recap_hook_split": "PASS (useTurnRecap.js exists + imported by App.js)",
+    "toast_on_espionage_400": "PASS — clicked espionage-destabilize-default on own system, sonner toast surfaced 'Target an enemy system.' verbatim from kernel 400 detail (previous iters silently rolled back)",
+    "duplicate_owner_removed_from_starfleet_item": "PASS (starfleet-item has 0 'Owner:' occurrences; system-info still shows Owner once)",
+    "eslint_clean": "PASS (0 errors / 0 warnings on src/App.js src/*.jsx src/hooks/*.js src/lib/*.js)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_recap.py",
+    "/app/backend/tests/test_kernel_owed_pact.py",
+    "/app/backend/tests/test_kernel_diplomacy.py",
+    "/app/backend/tests/test_kernel_persistence.py",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js still ~2900 lines even after 3-hook extraction; further splitting recommended (system-info panel, orders panel, diplomacy overlay each own component/hook).",
+    "kernelPost.js is a great DRY win — recommend migrating remaining fetch-with-error-body sites to it (currently only espionage + DiplomacyPouch/ObligationsHUD use it).",
+    "Console noise ws://localhost:443/ws harmless but pollutes dev console; consider disabling CRA WDS overlay ws in preview builds."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_kernel_recap.py (bumped to v5, added non-empty players + shape assertions on test_05, added test_06 backend-restart overlay)",
+    "/app/backend/tests/test_kernel_owed_pact.py (bumped accepted kernel version tuple to include 5)"
+  ],
+  "success_rate": {"backend": "100% (41/41 pytest)", "frontend": "100% (map, orders, resource hud, espionage, toast on 400, no duplicate Owner)"},
+  "seed_data_creation": "several game-mu4* ids created during regression + playwright; no manual cleanup required",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kernel v5 handoff #5 fully closed. All Grok hard-fails green: (1) ping v5, (2) SAVE_VERSION=2 unchanged, (3) snapshot.players + top-level players non-empty with full shape (id,name,civName,colors), (4) overlay after Mongo rehydrate works, (5) MapCanvas/OrdersTray still render after hook split, (6) toast surfaces kernel 400 detail verbatim, (7) duplicate Owner line removed, (8) ESLint flat-config clean. If future iterations touch host.ts::recapFor, keep the overlay-from-live-state logic — test_06 will catch regressions.",
+  "rca_of_the_issue": "N/A this iteration — everything passed. Test suite hardened to lock in v5 behavior: test_kernel_recap.py::test_05 now fails if snapshot.players regresses to empty/missing, test_06 fails if the Mongo-rehydrate overlay regresses."
+}

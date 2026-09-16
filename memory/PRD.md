@@ -12,7 +12,33 @@ Kernel contract: `/app/KERNEL.md`. Collab contract: `/app/GROK_EMERGENT.md`.
 
 ## What's been implemented
 
-### 2026-02 — Kernel v4 wrap (Grok handoff #4)
+### 2026-02 — Kernel v5 wrap (Grok handoff #5)
+- Unpacked kernel v5 (`consilium-kernel-v5.zip`) byte-for-byte
+  (ping returns `version: 5`; `SAVE_VERSION` unchanged at 2).
+- **Grok v5 gap closed:** `recap.snapshot.players` and top-level
+  `recap.players` are now non-empty arrays of
+  `{ id, name, civName, colors }`. Also verified to survive backend restart
+  (Mongo rehydrate → CLI `load` → overlay from live state).
+- **Hook split (task 1):**
+  - `frontend/src/hooks/useTurnTimer.js` — owns the 1s tick, `autoResolveFiredRef`,
+    and `secondsRemaining`. Only the host fires `resolveTurn()` on 0.
+  - `frontend/src/hooks/useTurnRecap.js` — fetches `/recap` when
+    `gameState.turn` advances past 1.
+  - `frontend/src/hooks/useDiplomacyPouch.js` — pouch open/close +
+    compound reload.
+  - MapCanvas + OrdersTray continue to render (no blank map).
+- **ESLint (task 2):** `frontend/eslint.config.mjs` flat config enforces
+  `no-undef` and `react/jsx-no-undef`. `npx eslint` on `src/*` is clean.
+- **Toast kernel 400s (task 3):** `frontend/src/lib/kernelPost.js`
+  surfaces kernel `detail` strings verbatim via `sonner`. Espionage
+  schedule/cancel, `DiplomacyPouch.post`, and `ObligationsHUD.post` all
+  route errors through it — no more silent rollback.
+- **Info-panel (task 4):** duplicate `Owner:` line removed from the
+  starfleet-item block (system-level Owner in system-info kept).
+- Verified via testing agent: **41/41 backend pytest** + all frontend
+  flows green (`/app/test_reports/iteration_8.json`).
+
+
 - Unpacked kernel v4 (`consilium-kernel-v4.zip`) byte-for-byte
   (ping returns `version: 4`; `SAVE_VERSION` unchanged at 2).
 - Added `CHANGELOG.md`, `ui-reference/ESPIONAGE.md`, `ui-reference/TURN_RECAP.md`,
