@@ -1170,3 +1170,66 @@ body {
   color: #bae6fd; font-size: 11px; letter-spacing: 0.06em;
   text-transform: none;
 }
+
+/* Espionage panel (kernel v4) — hangs off the selected system dock. */
+.espionage-panel {
+  margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.espionage-panel-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.22em;
+  color: #a78bfa; margin-bottom: 4px;
+}
+.espionage-panel button {
+  padding: 6px 10px; border-radius: 4px; font-size: 12px;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: #e0e7ff; cursor: pointer; text-align: left;
+}
+.espionage-panel button:hover:not(:disabled) { background: rgba(139, 92, 246, 0.28); }
+.espionage-panel button:disabled { opacity: 0.5; cursor: default; }
+.espionage-panel .espionage-queued {
+  background: rgba(220, 38, 38, 0.14);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #fecaca;
+}
+
+/* Turn recap overlay (kernel v4). */
+.turn-recap-scrim {
+  position: fixed; inset: 0; z-index: 55;
+  display: grid; place-items: center;
+  background: rgba(2, 6, 23, 0.72); backdrop-filter: blur(4px);
+}
+.turn-recap {
+  width: min(560px, 92vw); max-height: 84vh; overflow: auto;
+  background: #0f172a; color: #e2e8f0;
+  padding: 24px 24px 18px; border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.turn-recap-eyebrow {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; color: #a78bfa;
+}
+.turn-recap h2 { margin: 6px 0 14px; font-size: 22px; }
+.turn-recap section { margin-top: 12px; }
+.turn-recap section h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
+  color: #94a3b8; margin-bottom: 6px;
+}
+.turn-recap section ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.turn-recap section li { font-size: 12px; color: #cbd5e1; line-height: 1.4; }
+.turn-recap section li b { color: #e2e8f0; margin-right: 6px; }
+.turn-recap section li p { margin: 2px 0 0; font-size: 11px; color: #94a3b8; }
+.turn-recap-log { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.turn-recap-log li { font-size: 11px; color: #94a3b8; }
+.turn-recap-log li[data-severity="warning"] { color: #fbbf24; }
+.turn-recap-log li[data-severity="critical"] { color: #f87171; }
+.turn-recap-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+.turn-recap-actions button {
+  padding: 8px 14px; border-radius: 4px; font-size: 12px;
+  background: rgba(30, 41, 59, 0.9); color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35); cursor: pointer;
+}
+.turn-recap-actions button:hover { background: rgba(51, 65, 85, 0.9); }

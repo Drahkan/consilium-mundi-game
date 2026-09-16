@@ -295,6 +295,24 @@ export function tradeFrontierFor(
   return tradeFrontier(state, senderId, recipientId);
 }
 
+/** Last-turn recap for one admiralty. Do not invent a second event log. */
+export function recapFor(state: GameState, viewerId: string) {
+  const snaps = state.turnSnapshots ?? [];
+  return {
+    turn: state.turn,
+    previousTurn: Math.max(1, state.turn - 1),
+    phase: state.phase,
+    result: state.result ?? null,
+    winnerIds: state.winnerIds ?? [],
+    log: state.log ?? [],
+    promiseReports: (state.promiseReports ?? []).filter(
+      (r) => r.actorId === viewerId || r.otherId === viewerId,
+    ),
+    snapshot: snaps.length ? snaps[snaps.length - 1] : null,
+    snapshotCount: snaps.length,
+  };
+}
+
 export function openMatch(args: {
   options: GameOptions;
   hostCiv: Civilization;

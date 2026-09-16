@@ -3808,6 +3808,22 @@ function inboxForPlayer(state, playerId) {
 function tradeFrontierFor(state, senderId, recipientId) {
   return tradeFrontier(state, senderId, recipientId);
 }
+function recapFor(state, viewerId) {
+  const snaps = state.turnSnapshots ?? [];
+  return {
+    turn: state.turn,
+    previousTurn: Math.max(1, state.turn - 1),
+    phase: state.phase,
+    result: state.result ?? null,
+    winnerIds: state.winnerIds ?? [],
+    log: state.log ?? [],
+    promiseReports: (state.promiseReports ?? []).filter(
+      (r) => r.actorId === viewerId || r.otherId === viewerId
+    ),
+    snapshot: snaps.length ? snaps[snaps.length - 1] : null,
+    snapshotCount: snaps.length
+  };
+}
 function openMatch(args) {
   return createGame({
     options: args.options,
@@ -4167,7 +4183,7 @@ function dispatch(req) {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 3 };
+      return { ok: true, error: null, pong: true, version: 4 };
     case "optionsForType":
       return {
         ok: true,
@@ -4453,6 +4469,17 @@ function dispatch(req) {
           String(req.playerId ?? req.senderId),
           String(req.toId ?? req.recipientId)
         )
+      };
+    }
+    case "recap": {
+      const state = requireState(req);
+      const playerId = String(req.viewerId ?? req.playerId ?? "");
+      if (!playerId) return fail("viewerId is required");
+      return {
+        ok: true,
+        error: null,
+        state,
+        recap: recapFor(state, playerId)
       };
     }
     default:

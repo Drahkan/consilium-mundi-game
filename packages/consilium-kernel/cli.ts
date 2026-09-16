@@ -29,6 +29,7 @@ import {
   markReady,
   markUnready,
   openMatch,
+  recapFor,
   resolveIfDue,
   sendDispatch,
   shouldResolve,
@@ -74,7 +75,7 @@ function dispatch(req: Req): unknown {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 3 };
+      return { ok: true, error: null, pong: true, version: 4 };
     case "optionsForType":
       return {
         ok: true,
@@ -362,6 +363,17 @@ function dispatch(req: Req): unknown {
           String(req.playerId ?? req.senderId),
           String(req.toId ?? req.recipientId),
         ),
+      };
+    }
+    case "recap": {
+      const state = requireState(req);
+      const playerId = String(req.viewerId ?? req.playerId ?? "");
+      if (!playerId) return fail("viewerId is required");
+      return {
+        ok: true,
+        error: null,
+        state,
+        recap: recapFor(state, playerId),
       };
     }
     default:

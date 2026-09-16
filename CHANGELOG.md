@@ -1,19 +1,25 @@
-# Kernel changelog — 2026-09-15 (v3 ping)
+# Kernel changelog — 2026-09-15 (v4 ping)
 
-BREAKING: none. Ping now returns `"version": 3`.
+BREAKING: none. Ping now returns `"version": 4`. SAVE_VERSION stays **2**.
 
-## Shared sight (allies)
+## New CLI op: `recap`
 
-`visionOf` treats ally-owned systems (and systems adjacent to ally-owned systems) as visible, same as your own. `playerKnown` is true for allies even under Uncharted. No extra UI modal. HUD chip: "Shared sight: {ally names}" — see ui-reference/play-screen.tsx and ui-reference/SHARED_SIGHT.md.
+```
+{ "op": "recap", "state": GameState, "viewerId": "<playerId>" }
+→ { recap: { turn, previousTurn, phase, result, winnerIds, log, promiseReports, snapshot, snapshotCount } }
+```
 
-## inboxForPlayer additions
+`log` and `promiseReports` are the existing kernel fields (filtered to the viewer). `snapshot` is the last `turnSnapshots` frame. **Do not create a third event log.**
 
-`owedDeliveries`: `[{ pactId, resources, systemId, otherId }]` — use this in ObligationsHUD. Do **not** read `pact.a.playerId` (that field does not exist). Pact shape is `aId` / `bId` / `give` / `giveSystemId` / `request` / `requestSystemId`.
+HTTP: `GET /api/game/{id}/recap?player_id=` wrapping this op.
 
-Also returns `allyIds`.
+## New UI references (copy into frontend/src/)
 
-## Hosting must-fix
+| File | Use |
+|---|---|
+| `ui-reference/EspionagePanel.jsx` | Selected-system dock. 1 Tech. sabotage fleets/starport, destabilize, counter. POST existing `/espionage-orders`. |
+| `ui-reference/TurnRecap.jsx` | After-action overlay. Feed it `recap`. Replay still uses `ui-reference/replay-viewer.tsx` + `turnSnapshots`. |
 
-ObligationsHUD.jsx `pactHalf` looking at `pact.a.playerId` is wrong. Switch the banner to `inbox.owedDeliveries`.
+## App.js split (no kernel)
 
-Lobby: drop the "2 players" option. Kernel min is 3 (`openMatchLegacy` clamps `num_players` to 3–10). Copy: "3–4 admiralties (open seats fill with AI)".
+MapCanvas.jsx and OrdersTray.jsx must **render**, not `return null`. ResourceHUD stays. DiplomacyPouch + ObligationsHUD stay outside.

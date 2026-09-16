@@ -404,6 +404,9 @@ def mount_kernel(app: FastAPI) -> None:
             )
             state = data["state"]
         m["engine"] = state
+        gid = state.get("id")
+        if gid:
+            _persist(gid, m)
         return {"status": "espionage_orders_submitted"}
 
     @app.post("/api/game/{game_id}/resolve-turn")
@@ -597,6 +600,16 @@ def mount_kernel(app: FastAPI) -> None:
         )
         _save_engine(m, data)
         return {"status": "ok"}
+
+    @app.get("/api/game/{game_id}/recap")
+    async def game_recap(game_id: str, player_id: str):
+        # Kernel v4: CLI `recap` returns { turn, previousTurn, phase, result,
+        # winnerIds, log, promiseReports, snapshot, snapshotCount } for the
+        # given viewer. This does NOT invent a second event log — it is the
+        # kernel's own log filtered per player.
+        m = await _require_match_async(game_id)
+        data = _call("recap", state=m["engine"], viewerId=player_id)
+        return data.get("recap") or {}
 
     @app.get("/api/games")
     async def list_games():

@@ -3,6 +3,9 @@ import './App.css';
 import DiplomacyPouch from './DiplomacyPouch';
 import ObligationsHUD from './ObligationsHUD';
 import ResourceHUD from './ResourceHUD';
+import MapCanvas from './MapCanvas';
+import OrdersTray from './OrdersTray';
+import TurnRecap from './TurnRecap';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -43,6 +46,13 @@ function App() {
   const [joinGameId, setJoinGameId] = useState('');
   const [numPlayersConfig, setNumPlayersConfig] = useState(3);
   const [sharedSightAllyIds, setSharedSightAllyIds] = useState([]);
+  // Espionage (kernel v4) — queue of pending espionage orders for this
+  // admiralty. Each item mirrors the kernel `applyEspionage` args.
+  const [espionageQueue, setEspionageQueue] = useState([]);
+  // Turn recap (kernel v4) — payload from GET /api/game/{id}/recap fetched
+  // whenever the turn number advances. Shown once per resolution.
+  const [turnRecap, setTurnRecap] = useState(null);
+  const [lastRecapTurn, setLastRecapTurn] = useState(0);
   const [turnSecondsConfig, setTurnSecondsConfig] = useState(300); // 5 min default
   const [fowModeConfig, setFowModeConfig] = useState('basic'); // 'off' | 'basic'
   const [copiedFlag, setCopiedFlag] = useState(false);
@@ -149,6 +159,31 @@ function App() {
       }
     };
   }, [gameState?.turn_deadline, gameState?.phase, gameState?.turn, gameState?.turn_paused, gameState?.turn_paused_remaining, availablePlayers, currentPlayer]);
+
+  // Turn recap (kernel v4). Fetch when the turn number advances so the
+  // player sees log + promiseReports for the resolution that just landed.
+  useEffect(() => {
+    const t = gameState?.turn;
+    if (!currentGame || !currentPlayer || !t) return;
+    if (t <= 1) return;
+    if (t === lastRecapTurn) return;
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(
+          `${API_BASE}/api/game/${currentGame}/recap?player_id=${encodeURIComponent(currentPlayer)}`
+        );
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!alive) return;
+        setTurnRecap(d);
+        setLastRecapTurn(t);
+      } catch (err) {
+        console.warn('recap fetch failed', err);
+      }
+    })();
+    return () => { alive = false; };
+  }, [gameState?.turn, currentGame, currentPlayer, lastRecapTurn]);
 
   // Replay auto-play tick. Advances one snapshot every 1.6s while
   // replayPlaying is true; stops (and auto-pauses) at the last frame.
@@ -730,181 +765,6 @@ function App() {
       }
     }
   };
-  const renderOrderSummary = () => {
-    if (!showOrderSummary || !gameState) return null;
-    
-    const movementOrders = Object.values(starfleetOrders);
-    const currentBuildOrders = getCurrentPlayerBuildOrders();
-    const pendingBuildOrders = Object.values(currentBuildOrders);
-    const availableResources = calculateAvailableResources();
-    
-    // Calculate post-turn resources (current resources + income - upkeep - build costs)
-    const currentResources = gameState.player_resources || { tech: 0, metals: 0, chon: 0 };
-    let projectedIncome = { tech: 0, metals: 0, chon: 0 };
-    let upkeepCost = { tech: 0, metals: 0, chon: 0 };
-    
-    // Calculate income from owned systems
-    Object.values(gameState.systems || {}).forEach(system => {
-      if (system.owner === currentPlayer) {
-        projectedIncome.tech += system.resources.tech;
-        projectedIncome.metals += system.resources.metals;
-        projectedIncome.chon += system.resources.chon;
-        
-        // Add upgrade bonuses
-        if (system.upgrades.includes('colony')) projectedIncome.tech += 1;
-        if (system.upgrades.includes('mining_facilities')) {
-          projectedIncome.metals += 1;
-          projectedIncome.chon += 1;
-        }
-      }
-    });
-    
-    // Calculate upkeep (1 of each resource per starfleet)
-    let totalStarfleets = 0;
-    Object.values(gameState.systems || {}).forEach(system => {
-      if (system.starfleet_details) {
-        totalStarfleets += system.starfleet_details.filter(sf => sf.owner === currentPlayer).length;
-      }
-    });
-    
-    upkeepCost = { tech: totalStarfleets, metals: totalStarfleets, chon: totalStarfleets };
-    
-    const postTurnResources = {
-      tech: currentResources.tech + projectedIncome.tech - upkeepCost.tech,
-      metals: currentResources.metals + projectedIncome.metals - upkeepCost.metals,
-      chon: currentResources.chon + projectedIncome.chon - upkeepCost.chon
-    };
-    
-    return (
-      <div className="order-summary-panel fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-white">Order Summary</h3>
-            <button 
-              onClick={() => setShowOrderSummary(false)}
-              className="text-gray-400 hover:text-white text-xl"
-            >
-              ×
-            </button>
-          </div>
-          
-          {/* Movement Orders */}
-          <div className="mb-4">
-            <h4 className="text-lg font-semibold text-yellow-400 mb-2">
-              Movement Orders ({movementOrders.length})
-            </h4>
-            {movementOrders.length > 0 ? (
-              <div className="space-y-2">
-                {movementOrders.map((order, index) => {
-                  const starfleetSystem = Object.values(gameState.systems).find(sys => 
-                    sys.starfleet_details?.some(sf => sf.id === order.starfleet_id)
-                  );
-                  const targetSystem = gameState.systems[order.target_system];
-                  
-                  return (
-                    <div 
-                      key={index} 
-                      className="text-sm text-gray-300 bg-gray-700 p-2 rounded cursor-pointer hover:bg-gray-600 transition-colors"
-                      onClick={() => handleOrderClick('move', starfleetSystem?.id, order.starfleet_id)}
-                    >
-                      Starfleet from {starfleetSystem?.name || 'Unknown'} → {order.order_type} → {targetSystem?.name || order.target_system}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-sm">No movement orders</p>
-            )}
-          </div>
-          
-          {/* Build Orders */}
-          <div className="mb-4">
-            <h4 className="text-lg font-semibold text-blue-400 mb-2">
-              Build Orders ({pendingBuildOrders.length})
-            </h4>
-            {pendingBuildOrders.length > 0 ? (
-              <div className="space-y-2">
-                {pendingBuildOrders.map((order, index) => {
-                  const system = gameState.systems[order.system_id];
-                  return (
-                    <div 
-                      key={index} 
-                      className="text-sm text-gray-300 bg-gray-700 p-2 rounded cursor-pointer hover:bg-gray-600 transition-colors"
-                      onClick={() => handleOrderClick('build', order.system_id)}
-                    >
-                      Building {order.build_type.replace('_', ' ')} in {system?.name || 'Unknown System'}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-sm">No build orders</p>
-            )}
-          </div>
-          
-          {/* Resource Summary */}
-          <div className="mb-4">
-            <h4 className="text-lg font-semibold text-green-400 mb-2">Resource Summary</h4>
-            <div className="grid grid-cols-4 gap-4 text-sm">
-              <div className="text-center">
-                <div className="font-semibold text-gray-300">Resource</div>
-                <div className="text-white">Current</div>
-                <div className="text-green-400">Income</div>
-                <div className="text-red-400">Upkeep</div>
-                <div className="text-yellow-400">Available</div>
-                <div className="text-blue-400">Post-Turn</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-blue-400">Tech</div>
-                <div>{currentResources.tech}</div>
-                <div>+{projectedIncome.tech}</div>
-                <div>-{upkeepCost.tech}</div>
-                <div>{availableResources.tech}</div>
-                <div>{postTurnResources.tech}</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-gray-400">Metals</div>
-                <div>{currentResources.metals}</div>
-                <div>+{projectedIncome.metals}</div>
-                <div>-{upkeepCost.metals}</div>
-                <div>{availableResources.metals}</div>
-                <div>{postTurnResources.metals}</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-green-400">CHON</div>
-                <div>{currentResources.chon}</div>
-                <div>+{projectedIncome.chon}</div>
-                <div>-{upkeepCost.chon}</div>
-                <div>{availableResources.chon}</div>
-                <div>{postTurnResources.chon}</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3">
-            <button 
-              onClick={() => setShowOrderSummary(false)}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
-            >
-              Close
-            </button>
-            {(movementOrders.length > 0 || pendingBuildOrders.length > 0) && (
-              <button 
-                onClick={() => {
-                  setShowOrderSummary(false);
-                  submitAllOrders();
-                }}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500"
-              >
-                Finalize Orders
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   // Calculate if build orders would cause starfleet destruction
   const calculateStarfleetDestructionRisk = () => {
@@ -1116,6 +976,58 @@ function App() {
       console.error('Error submitting build orders:', err);
       setError(err.message);
     }
+  };
+
+  // Espionage (kernel v4). Each schedule POSTs the whole queue so the
+  // kernel sees a consistent set of intended actions this turn.
+  const scheduleEspionage = async (payload) => {
+    if (!currentGame || !currentPlayer) return;
+    const item = {
+      id: `esp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      kind: payload.kind === 'counter_espionage' ? 'counter' : payload.kind,
+      espionage_type: payload.kind === 'counter_espionage' ? 'counter' : payload.kind,
+      system_id: payload.systemId,
+      target_upgrade: payload.targetUpgrade || null,
+      other_player_id: payload.otherPlayerId || null,
+      third_player_id: payload.thirdPlayerId || null,
+    };
+    const nextQueue = [...espionageQueue, item];
+    setEspionageQueue(nextQueue);
+    try {
+      await axios.post(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
+        player_id: currentPlayer,
+        orders: nextQueue,
+      });
+    } catch (err) {
+      console.warn('espionage POST failed', err);
+      // rollback local state on server rejection
+      setEspionageQueue(espionageQueue);
+    }
+  };
+
+  const cancelEspionage = async (id) => {
+    const nextQueue = espionageQueue.filter((e) => e.id !== id);
+    setEspionageQueue(nextQueue);
+    if (!currentGame || !currentPlayer) return;
+    try {
+      await axios.post(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
+        player_id: currentPlayer,
+        orders: nextQueue,
+      });
+    } catch (err) {
+      console.warn('espionage cancel POST failed', err);
+    }
+  };
+
+  // Ally-owned target → warn. Kernel's `hostileOrderWarning` text style.
+  const confirmHostileEspionage = async (kind, systemId) => {
+    const sys = gameState?.systems?.[systemId];
+    if (!sys || !sys.owner) return null;
+    if (sys.owner === currentPlayer) return null;
+    if (!(sharedSightAllyIds || []).includes(sys.owner)) return null;
+    const kp = (gameState?.kernel?.players || []).find((p) => p.id === sys.owner);
+    const allyName = kp?.civ?.name || sys.owner;
+    return `You are allied with ${allyName}. Espionage at ${sys.name} is a hostile act. Continue anyway?`;
   };
 
   // Submit all orders (both movement and build)
@@ -1772,363 +1684,7 @@ function App() {
   }, [currentPlayer, playerBuildOrders]);
 
   // Render galaxy map
-  const renderGalaxyMap = () => {
-    if (!gameState || !gameState.systems) return null;
-
-    const systems = Object.values(gameState.systems);
-
-    // Build a lookup: starfleet_id → source system, and a list of current
-    // player's pending orders with resolved source/target coordinates so we
-    // can overlay Move / Support arrows on the map.
-    const starfleetSystemLookup = {};
-    systems.forEach(sys => {
-      (sys.starfleet_details || []).forEach(sf => {
-        starfleetSystemLookup[sf.id] = sys;
-      });
-    });
-    const pendingOrderArrows = Object.values(starfleetOrders || {}).map(order => {
-      const src = starfleetSystemLookup[order.starfleet_id];
-      const targetId = order.order_type === 'support' ? order.support_target : order.target_system;
-      const dst = targetId ? gameState.systems[targetId] : null;
-      if (!src || !dst) return null;
-      return { order, src, dst };
-    }).filter(Boolean);
-
-    // Rally-point overlays. Only draw for the current player's own
-    // fleets — even though the API only returns rally_point on FULL
-    // visibility, we scope by owner defensively so a shared-sight /
-    // spectator view can never leak someone else's retreat plan.
-    // Each entry: { fleet, src (fleet's system), dst (rally system) }.
-    // We also compute a parallel "ghost" list from `pendingRally` so
-    // the player sees where they'll rally BEFORE they click Set.
-    const rallyLinks = [];
-    const ghostRallyLinks = [];
-    systems.forEach(sys => {
-      (sys.starfleet_details || []).forEach(sf => {
-        if (sf.owner !== currentPlayer) return;
-        // Committed rally
-        if (sf.rally_point) {
-          const dst = gameState.systems[sf.rally_point];
-          if (dst && dst.id !== sys.id) {
-            rallyLinks.push({ fleet: sf, src: sys, dst });
-          }
-        }
-        // Pending rally (may differ from committed)
-        const raw = pendingRally[sf.id];
-        if (raw !== undefined) {
-          const pendingTarget = raw === 'CLEAR' ? '' : raw;
-          const currentTarget = sf.rally_point || '';
-          if (pendingTarget !== currentTarget && pendingTarget) {
-            const dst = gameState.systems[pendingTarget];
-            if (dst && dst.id !== sys.id) {
-              ghostRallyLinks.push({ fleet: sf, src: sys, dst });
-            }
-          }
-        }
-      });
-    });
-    // De-duplicate the "R" marker: if a player has multiple fleets
-    // rallying to the same system we still only draw one flag on it.
-    const rallySystemIds = new Set(rallyLinks.map(l => l.dst.id));
-    const ghostRallySystemIds = new Set(ghostRallyLinks.map(l => l.dst.id));
-    
-    return (
-      <div className="galaxy-container">
-        <svg 
-          className="galaxy-map" 
-          viewBox="0 0 800 600"
-          preserveAspectRatio="xMidYMid meet"
-          onWheel={handleMapWheel}
-          onMouseDown={handleMapMouseDown}
-          onMouseMove={handleMapMouseMove}
-          onMouseUp={handleMapMouseUp}
-          onMouseLeave={handleMapMouseUp}
-          style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-        >
-          {/* Background */}
-          <defs>
-            <radialGradient id="spaceGradient" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#1a202c" />
-              <stop offset="100%" stopColor="#0f0f23" />
-            </radialGradient>
-            <marker id="arrow-move" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
-            </marker>
-            <marker id="arrow-support" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
-            </marker>
-          </defs>
-          <rect width="800" height="600" fill="url(#spaceGradient)" />
-          
-          {/* Main map group with zoom and pan transforms */}
-          <g transform={`translate(${mapPan.x}, ${mapPan.y}) scale(${mapZoom})`}>
-            {/* Draw connections first. Key is normalized to the
-                sorted pair so mutual connections (A→B and B→A) don't
-                trigger React's duplicate-key warning. */}
-            {systems.map(system => 
-              system.connections.map(connId => {
-                const connSystem = gameState.systems[connId];
-                if (!connSystem) return null;
-                const [a, b] = [system.id, connId].sort();
-                
-                return (
-                  <line
-                    key={`conn-${a}-${b}`}
-                    x1={system.x}
-                    y1={system.y}
-                    x2={connSystem.x}
-                    y2={connSystem.y}
-                    stroke="#4a5568"
-                    strokeWidth="1"
-                    opacity="0.6"
-                  />
-                );
-              })
-            )}
-            
-            {/* Rally-point overlay: thin dashed line from each of the
-                current player's fleets to its rally system, plus a
-                small "R" flag on the rally system. Rendered under the
-                move/support arrows and under the system nodes so it
-                never intercepts clicks. */}
-            {rallyLinks.map(({ fleet, src, dst }, idx) => {
-              const color = getPlayerColor(currentPlayer);
-              const dx = dst.x - src.x;
-              const dy = dst.y - src.y;
-              const len = Math.max(1, Math.sqrt(dx*dx + dy*dy));
-              const shrink = 10;
-              const tx = dst.x - (dx / len) * shrink;
-              const ty = dst.y - (dy / len) * shrink;
-              const sx = src.x + (dx / len) * shrink;
-              const sy = src.y + (dy / len) * shrink;
-              return (
-                <line
-                  key={`rally-line-${fleet.id}-${idx}`}
-                  x1={sx}
-                  y1={sy}
-                  x2={tx}
-                  y2={ty}
-                  stroke={color}
-                  strokeWidth="1"
-                  strokeDasharray="2 4"
-                  opacity="0.55"
-                  pointerEvents="none"
-                />
-              );
-            })}
-            {Array.from(rallySystemIds).map(sid => {
-              const sys = gameState.systems[sid];
-              if (!sys) return null;
-              const color = getPlayerColor(currentPlayer);
-              // Offset the flag up-and-right so it doesn't collide
-              // with the resource label (below) or system name (above).
-              const fx = sys.x + 14;
-              const fy = sys.y - 4;
-              return (
-                <g key={`rally-flag-${sid}`} pointerEvents="none" data-testid={`rally-flag-${sid}`}>
-                  {/* Flag pole */}
-                  <line x1={fx} y1={fy + 8} x2={fx} y2={fy - 8} stroke={color} strokeWidth="1" />
-                  {/* Flag banner */}
-                  <polygon
-                    points={`${fx},${fy - 8} ${fx + 8},${fy - 5} ${fx},${fy - 2}`}
-                    fill={color}
-                    stroke="#0f0f23"
-                    strokeWidth="0.5"
-                  />
-                  <text
-                    x={fx + 3}
-                    y={fy - 4}
-                    fontSize="6"
-                    fontWeight="bold"
-                    fill="#0f0f23"
-                  >
-                    R
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Ghost rally overlay — pending selections not yet
-                committed. Rendered translucent + with a dashed banner
-                outline so it's clearly distinguishable from a real
-                (committed) rally flag on the same map. */}
-            {ghostRallyLinks.map(({ fleet, src, dst }, idx) => {
-              const color = getPlayerColor(currentPlayer);
-              const dx = dst.x - src.x;
-              const dy = dst.y - src.y;
-              const len = Math.max(1, Math.sqrt(dx*dx + dy*dy));
-              const shrink = 10;
-              const tx = dst.x - (dx / len) * shrink;
-              const ty = dst.y - (dy / len) * shrink;
-              const sx = src.x + (dx / len) * shrink;
-              const sy = src.y + (dy / len) * shrink;
-              return (
-                <line
-                  key={`ghost-rally-line-${fleet.id}-${idx}`}
-                  x1={sx}
-                  y1={sy}
-                  x2={tx}
-                  y2={ty}
-                  stroke={color}
-                  strokeWidth="1"
-                  strokeDasharray="1 3"
-                  opacity="0.3"
-                  pointerEvents="none"
-                />
-              );
-            })}
-            {Array.from(ghostRallySystemIds).map(sid => {
-              const sys = gameState.systems[sid];
-              if (!sys) return null;
-              const color = getPlayerColor(currentPlayer);
-              const fx = sys.x + 14;
-              const fy = sys.y - 4;
-              return (
-                <g key={`ghost-rally-flag-${sid}`} pointerEvents="none" opacity="0.45" data-testid={`ghost-rally-flag-${sid}`}>
-                  <line x1={fx} y1={fy + 8} x2={fx} y2={fy - 8} stroke={color} strokeWidth="1" strokeDasharray="2 2" />
-                  <polygon
-                    points={`${fx},${fy - 8} ${fx + 8},${fy - 5} ${fx},${fy - 2}`}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="1"
-                    strokeDasharray="1.5 1"
-                  />
-                  <text
-                    x={fx + 3}
-                    y={fy - 4}
-                    fontSize="6"
-                    fontWeight="bold"
-                    fill={color}
-                  >
-                    R
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Pending order overlay (movement/support arrows for current player) */}
-            {pendingOrderArrows.map(({ order, src, dst }, idx) => {
-              const isSupport = order.order_type === 'support';
-              const stroke = isSupport ? '#38bdf8' : '#fbbf24';
-              const marker = isSupport ? 'url(#arrow-support)' : 'url(#arrow-move)';
-              const label = isSupport ? 'S' : 'M';
-              // Shorten the arrow so it doesn't sit under the target node
-              const dx = dst.x - src.x;
-              const dy = dst.y - src.y;
-              const len = Math.max(1, Math.sqrt(dx*dx + dy*dy));
-              const shrink = 10; // pixels from target center
-              const tx = dst.x - (dx / len) * shrink;
-              const ty = dst.y - (dy / len) * shrink;
-              const midx = (src.x + tx) / 2;
-              const midy = (src.y + ty) / 2;
-              return (
-                <g key={`ord-${order.starfleet_id}-${idx}`} pointerEvents="none">
-                  <line
-                    x1={src.x}
-                    y1={src.y}
-                    x2={tx}
-                    y2={ty}
-                    stroke={stroke}
-                    strokeWidth="1.5"
-                    strokeDasharray={isSupport ? '4 3' : '0'}
-                    opacity="0.9"
-                    markerEnd={marker}
-                  />
-                  <circle cx={midx} cy={midy} r="7" fill="#0f0f23" stroke={stroke} strokeWidth="1" />
-                  <text x={midx} y={midy + 3} fontSize="9" fontWeight="bold" fill={stroke} textAnchor="middle">
-                    {label}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Draw systems */}
-            {systems.map(system => {
-              const vis = system.visibility || 'full';
-              const isHidden = vis === 'hidden';
-              const isPartial = vis === 'partial';
-              const radius = isHidden ? 6 : (system.is_home_system ? 12 : 8);
-              // Owner color: HIDDEN → dark grey; PARTIAL → neutral grey
-              // (owner identity is redacted); FULL → real owner color
-              const fillColor = isHidden
-                ? '#2a2f3a'
-                : isPartial
-                  ? (system.has_owner ? '#64748b' : '#334155')
-                  : getPlayerColor(system.owner);
-              const strokeColor = selectedSystem === system.id
-                ? '#ffd700'
-                : (isHidden ? '#475569' : '#ffffff');
-              return (
-                <g key={system.id} opacity={isHidden ? 0.7 : 1}>
-                  <circle
-                    cx={system.x}
-                    cy={system.y}
-                    r={radius}
-                    fill={fillColor}
-                    stroke={strokeColor}
-                    strokeWidth={selectedSystem === system.id ? "3" : system.is_home_system ? "2" : "1"}
-                    strokeDasharray={isHidden ? '3 2' : (isPartial ? '5 3' : '0')}
-                    className="system-node"
-                    onClick={() => handleSystemClick(system.id)}
-                    onDoubleClick={() => handleSystemDoubleClick(system.id)}
-                    style={{ cursor: 'pointer' }}
-                  />
-
-                  {/* System name (or ??? when hidden) */}
-                  <text
-                    x={system.x}
-                    y={system.y - 18}
-                    fill={isHidden ? '#64748b' : '#ffffff'}
-                    fontSize="10"
-                    textAnchor="middle"
-                    className="system-label"
-                    style={{ fontStyle: isHidden ? 'italic' : 'normal' }}
-                  >
-                    {isHidden ? '???' : system.name}
-                    {isPartial && system.has_owner ? ' ★' : ''}
-                    {isPartial && system.has_upgrades ? ' +' : ''}
-                  </text>
-
-                  {/* Resource indicators — only for FULL visibility */}
-                  {vis === 'full' && system.resources && (
-                    <text
-                      x={system.x}
-                      y={system.y + 25}
-                      fill="#a0aec0"
-                      fontSize="8"
-                      textAnchor="middle"
-                      className="resource-label"
-                    >
-                      T:{system.resources.tech} M:{system.resources.metals} C:{system.resources.chon}
-                    </text>
-                  )}
-
-                  {/* Starfleet indicators — only FULL exposes fleets */}
-                  {vis === 'full' && system.starfleet_details && system.starfleet_details.map((starfleet, index) => (
-                    <circle
-                      key={starfleet.id}
-                      cx={system.x + 10 + (index * 8)}
-                      cy={system.y - 10}
-                      r="4"
-                      fill={getPlayerColor(starfleet.owner)}
-                      stroke={selectedStarfleet === starfleet.id ? "#ffd700" : "#ffffff"}
-                      strokeWidth={selectedStarfleet === starfleet.id ? "2" : "1"}
-                      className="starfleet-node"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStarfleetClick(starfleet.id, system.id);
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    />
-                  ))}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-      </div>
-    );
-  };
+  // renderGalaxyMap was moved to MapCanvas.jsx (Grok App.js split).
 
   // Render system details
   const renderSystemDetails = () => {
@@ -2776,196 +2332,6 @@ function App() {
       </div>
     );
   };
-  const renderBuildingPanel = () => {
-    if (!selectedSystem || !gameState || !showBuildPanel) return null;
-    
-    const system = gameState.systems[selectedSystem];
-    if (!system || system.owner !== currentPlayer) return null;
-    
-    const availableResources = calculateAvailableResources();
-    const currentBuildOrders = getCurrentPlayerBuildOrders();
-    
-    const buildOptions = [
-      {
-        type: 'starfleet',
-        name: 'Starfleet',
-        cost: { tech: 1, metals: 1, chon: 1 },
-        requirement: 'shipyard',
-        canBuild: system.upgrades.includes('shipyard')
-      },
-      {
-        type: 'starport',
-        name: 'Starport',
-        cost: { tech: 2, metals: 2, chon: 2 },
-        requirement: null,
-        canBuild: !system.upgrades.includes('starport')
-      },
-      {
-        type: 'shipyard',
-        name: 'Shipyard',
-        cost: { tech: 3, metals: 3, chon: 1 },
-        requirement: null,
-        canBuild: !system.upgrades.includes('shipyard')
-      },
-      {
-        type: 'colony',
-        name: 'Colony',
-        cost: { tech: 0, metals: 2, chon: 2 },
-        requirement: null,
-        canBuild: !system.upgrades.includes('colony')
-      },
-      {
-        type: 'mining_facilities',
-        name: 'Mining Facilities',
-        cost: { tech: 2, metals: 2, chon: 1 },
-        requirement: null,
-        canBuild: !system.upgrades.includes('mining_facilities')
-      },
-      {
-        type: 'wormhole_generator',
-        name: 'Wormhole Generator',
-        cost: { tech: 6, metals: 2, chon: 0 },
-        requirement: null,
-        canBuild: !system.upgrades.includes('wormhole_generator')
-      }
-    ];
-    
-    return (
-      <div className="building-panel">
-        <h4>Construction</h4>
-        <p>Build in: {system.name}</p>
-        <p>Available after pending orders: T:{availableResources.tech} M:{availableResources.metals} C:{availableResources.chon}</p>
-        
-        <div className="build-options">
-          {buildOptions.map(option => {
-            const canAfford = availableResources.tech >= option.cost.tech &&
-                             availableResources.metals >= option.cost.metals &&
-                             availableResources.chon >= option.cost.chon;
-            
-            const isDisabled = !option.canBuild || !canAfford;
-            
-            // Check if requirement is missing (only show "Requires" when NOT met)
-            const missingRequirement = option.requirement && !system.upgrades.includes(option.requirement);
-            
-            return (
-              <div key={option.type} className="build-option">
-                <div className="build-info">
-                  <strong>{option.name}</strong>
-                  <div className="build-cost">
-                    Cost: T:{option.cost.tech} M:{option.cost.metals} C:{option.cost.chon}
-                  </div>
-                  {missingRequirement && (
-                    <div className="build-requirement">
-                      Requires: {option.requirement}
-                    </div>
-                  )}
-                </div>
-                
-                <button
-                  onClick={() => issueBuildOrder(option.type, selectedSystem)}
-                  disabled={isDisabled && !currentBuildOrders[`${selectedSystem}_${option.type}`]}
-                  className={`build-btn ${isDisabled && !currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'disabled' : ''} ${currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'selected' : ''}`}
-                >
-                  {currentBuildOrders[`${selectedSystem}_${option.type}`] ? 'Cancel' : 'Build'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        
-        {Object.keys(currentBuildOrders).length > 0 && (
-          <div className="build-queue">
-            <p>{Object.keys(currentBuildOrders).length} build orders pending</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-  const renderOrdersPanel = () => {
-    if (!selectedStarfleet || !gameState || !selectedSystem) return null;
-    
-    const starfleet = gameState.systems[selectedSystem]?.starfleet_details?.find(
-      sf => sf.id === selectedStarfleet
-    );
-    
-    if (!starfleet || starfleet.owner !== currentPlayer) return null;
-    
-    // Get current order for this starfleet
-    const currentOrder = starfleetOrders[selectedStarfleet];
-    const currentOrderType = currentOrder?.order_type || 'defend';
-    
-    const system = gameState.systems[selectedSystem];
-    const connections = system.connections || [];
-
-    return (
-      <div className="orders-panel">
-        <h4>Starfleet Orders</h4>
-        <p>Starfleet in: {system.name}</p>
-        
-        <div className="order-buttons">
-          <button 
-            onClick={() => issueStarfleetOrder('defend')}
-            className={`order-btn defend-btn ${currentOrderType === 'defend' ? 'selected' : ''}`}
-          >
-            Defend System
-          </button>
-          
-          {connections.map(connId => {
-            const connSystem = gameState.systems[connId];
-            if (!connSystem) return null;
-            
-            const isSelected = currentOrderType === 'move' && currentOrder?.target_system === connId;
-            
-            return (
-              <button
-                key={connId}
-                onClick={() => {
-                  // If clicking the same move order, act like Defend System
-                  if (isSelected) {
-                    issueStarfleetOrder('defend');
-                  } else {
-                    issueStarfleetOrder('move', connId);
-                  }
-                }}
-                className={`order-btn move-btn ${isSelected ? 'selected' : ''}`}
-              >
-                Move to {connSystem.name}
-              </button>
-            );
-          })}
-        </div>
-
-        {connections.length > 0 && (
-          <div className="support-section">
-            <p>Support Actions:</p>
-            {connections.map(connId => {
-              const connSystem = gameState.systems[connId];
-              if (!connSystem) return null;
-              
-              const isSelected = currentOrderType === 'support' && currentOrder?.target_system === connId;
-              
-              return (
-                <button
-                  key={`support_${connId}`}
-                  onClick={() => {
-                    // If clicking the same support order, act like Defend System
-                    if (isSelected) {
-                      issueStarfleetOrder('defend');
-                    } else {
-                      issueStarfleetOrder('support', connId);
-                    }
-                  }}
-                  className={`order-btn support-btn ${isSelected ? 'selected' : ''}`}
-                >
-                  Support {connSystem.name}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const shareUrl = () => {
     try {
@@ -3415,17 +2781,68 @@ function App() {
                 .join(', ')}
             </div>
           )}
+
+          {/* Turn recap — kernel v4 CLI `recap` payload. Reference component
+              is ui-reference/TurnRecap.jsx. Do not invent a third log. */}
+          {turnRecap && (
+            <TurnRecap
+              recap={turnRecap}
+              meId={currentPlayer}
+              nameOf={(pid) => {
+                const kp = (gameState?.kernel?.players || []).find((p) => p.id === pid);
+                return kp?.civ?.name || (availablePlayers || []).find((p) => p.id === pid)?.name || pid;
+              }}
+              onClose={() => setTurnRecap(null)}
+              onOpenDiplomacy={() => { setTurnRecap(null); setShowDiplomacy(true); }}
+            />
+          )}
           
           <div className="galaxy-section">
-            {renderGalaxyMap()}
+            {gameState && gameState.systems && (
+              <MapCanvas
+                gameState={gameState}
+                currentPlayer={currentPlayer}
+                starfleetOrders={starfleetOrders}
+                pendingRally={pendingRally}
+                mapPan={mapPan}
+                mapZoom={mapZoom}
+                selectedStarfleet={selectedStarfleet}
+                selectedSystem={selectedSystem}
+                getPlayerColor={getPlayerColor}
+                handleMapMouseDown={handleMapMouseDown}
+                handleMapMouseMove={handleMapMouseMove}
+                handleMapMouseUp={handleMapMouseUp}
+                handleMapWheel={handleMapWheel}
+                handleSystemClick={handleSystemClick}
+                handleSystemDoubleClick={handleSystemDoubleClick}
+                handleStarfleetClick={handleStarfleetClick}
+              />
+            )}
           </div>
           
           <div className="info-panel">
             {renderSystemDetails()}
-            {renderBuildingPanel()}
             {renderCombatReports()}
-            {renderOrdersPanel()}
-            {renderOrderSummary()}
+            <OrdersTray
+              gameState={gameState}
+              currentPlayer={currentPlayer}
+              starfleetOrders={starfleetOrders}
+              selectedStarfleet={selectedStarfleet}
+              selectedSystem={selectedSystem}
+              showBuildPanel={showBuildPanel}
+              showOrderSummary={showOrderSummary}
+              setShowOrderSummary={setShowOrderSummary}
+              handleOrderClick={handleOrderClick}
+              issueStarfleetOrder={issueStarfleetOrder}
+              issueBuildOrder={issueBuildOrder}
+              submitAllOrders={submitAllOrders}
+              getCurrentPlayerBuildOrders={getCurrentPlayerBuildOrders}
+              calculateAvailableResources={calculateAvailableResources}
+              espionageQueue={espionageQueue}
+              onScheduleEspionage={scheduleEspionage}
+              onCancelEspionage={cancelEspionage}
+              onConfirmHostileEspionage={confirmHostileEspionage}
+            />
             
             {(Object.keys(starfleetOrders).length > 0 || Object.keys(getCurrentPlayerBuildOrders()).length > 0) && (
               <div className="global-submit-section">
