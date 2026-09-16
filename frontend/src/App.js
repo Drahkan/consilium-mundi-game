@@ -2806,6 +2806,7 @@ function App() {
                 pendingRally={pendingRally}
                 mapPan={mapPan}
                 mapZoom={mapZoom}
+                isDragging={isDragging}
                 selectedStarfleet={selectedStarfleet}
                 selectedSystem={selectedSystem}
                 getPlayerColor={getPlayerColor}

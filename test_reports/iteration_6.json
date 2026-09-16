@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 6 (kernel v4 + App.js split + Espionage + Turn Recap). Kernel ping v4 OK. SAVE_VERSION still 2 OK. Backend: /api/game/{id}/recap route works and returns correct shape (turn, previousTurn, phase, result, winnerIds, log, promiseReports, snapshot, snapshotCount). Missing player_id => 422 OK. Full regression: 38/40 pytest pass. CRITICAL FRONTEND FAIL: MapCanvas.jsx references `isDragging` which is NOT one of its 15 props — this triggers ReferenceError: isDragging is not defined and the galaxy map does NOT render (exactly the 'blank map' hard-fail Grok warned about). Overlay 'Uncaught runtime errors' appears; galaxy-section is absent from DOM, so all downstream tests (info-panel, EspionagePanel, OrdersTray in-game view) cannot be executed via the UI.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/game/{id}/recap?player_id=BOGUS", "issue": "Returns 200 with a valid-looking recap for an unknown player_id. Spec requires 4xx (kernel-derived). Backend does not validate viewerId against engine.players before delegating to kernel `recap`, and the kernel appears to tolerate unknown viewerId silently."},
+      {"endpoint": "GET /api/game/{id}/recap (snapshot)", "issue": "recap.snapshot has keys {turn, phase, systems, resources, combat}. Spec explicitly requires snapshot to contain systems / players / turn. `players` is missing (player data is only exposed indirectly via `resources` keyed by player id). Kernel host.ts::recapFor should include a `players` array in snapshot for parity with the spec."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MapCanvas.jsx", "issue": "BLANK MAP HARD FAIL. Line 97 `style={{ cursor: isDragging ? 'grabbing' : 'grab' }}` references `isDragging`, but the component receives only 15 named props and `isDragging` is not one of them (it lives in App.js as `const [isDragging, setIsDragging] = useState(false)`). React throws `ReferenceError: isDragging is not defined` at render time; the CRA runtime-error overlay covers the game screen; `.galaxy-section` never mounts; system <circle>/<g> nodes count = 0.", "selector": ".galaxy-section svg", "priority": "CRITICAL"},
+      {"component": "App.js -> <MapCanvas />", "issue": "Prop list passed to MapCanvas is missing `isDragging`. Fix: add `isDragging={isDragging}` (and consider adding it to the MapCanvas signature) OR remove/redirect the reference inside MapCanvas.jsx. Without this the entire in-game UI is inaccessible: OrdersTray, EspionagePanel, ResourceHUD, TurnRecap flows cannot be exercised.", "selector": "MapCanvas prop list in App.js line ~2802", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "In-game screen (post Start Game)", "issue": "Crashes with runtime error before galaxy renders; downstream espionage-panel / orders-tray / resource-hud cannot be verified via UI due to this single missing prop. Recommend fixing then re-running the espionage E2E.", "affected_selectors": ["[data-testid='espionage-panel']","[data-testid='resource-hud']","[data-testid='turn-recap']",".galaxy-section svg"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_recap.py",
+    "/app/backend/tests/test_kernel_owed_pact.py",
+    "/app/backend/tests/test_kernel_diplomacy.py",
+    "/app/backend/tests/test_kernel_persistence.py",
+    "/app/test_reports/pytest/iteration_6.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix MapCanvas.jsx `isDragging` reference. Either (a) add `isDragging` to the MapCanvas prop signature and pass it from App.js, or (b) drive cursor from `mapPan?.dragging` / dedicated prop. This unblocks the entire in-game UI (galaxy map, espionage panel, orders tray, resource HUD, turn recap flows). Grok's 'stop and say so if a cut risks a blank map' condition IS TRIGGERED.",
+    "MEDIUM: Backend /api/game/{id}/recap should validate player_id against engine.players and return 400/404 for unknown viewer instead of 200. Currently the kernel CLI `recap` silently produces a recap for any string.",
+    "MEDIUM: Kernel host.ts::recapFor should include `players` in snapshot; spec: 'snapshot must be non-null and contain systems/players/turn.' Currently exposes systems/turn/phase/resources/combat only.",
+    "LOW: Remove or gitignore /app/frontend/src/App.js.grok_broken.bak."
+  ],
+  "critical_code_review_comments": [
+    "App.js is 2891 lines — still too large. The split extracted MapCanvas/OrdersTray/EspionagePanel/TurnRecap but the parent component remains monolithic; recommend continuing the extraction (Diplomacy modal, Turn Timer, Recap fetch effect).",
+    "MapCanvas.jsx should validate/document its full prop contract; a PropTypes or TypeScript conversion would have caught the missing `isDragging` at build time.",
+    "Backend /recap route does no input validation — trust boundary issue. Add explicit `player_id` existence check via kernel state before calling CLI.",
+    "test_kernel_owed_pact.py had a stale hardcoded assertion for version==3; updated to accept 3+."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_kernel_owed_pact.py (relaxed ping version assertion to 3+)",
+    "/app/backend/tests/test_kernel_recap.py (NEW — 7 tests for kernel v4 ping, SAVE_VERSION, and /recap endpoint shape/validation)"
+  ],
+  "success_rate": {"backend": "95% (38/40 pytest; 2 failures are spec-violations in kernel/backend, not test bugs)", "frontend": "0% in-game (map crash blocks everything post-lobby); landing + lobby OK"},
+  "seed_data_creation": "Test games created in Mongo during regression: several game-mu3d* ids. Existing pytest suite already creates + tears down via game lifecycle; no manual cleanup needed.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Grok payload evidence: (a) ping v4 stdout = {\"ok\":true,\"error\":null,\"pong\":true,\"version\":4} ✅  (b) MapCanvas renders NO — ReferenceError isDragging in MapCanvas.jsx:97; OrdersTray/EspionagePanel unreachable via UI ❌  (c) /recap returns log[]+promiseReports[] YES ✅ (shape complete, but bogus-player validation and snapshot.players are missing)  (d) EspionagePanel visible NO — blocked by (b). File exists with correct data-testids: espionage-panel, espionage-sabotage-fleets, espionage-sabotage-starport, espionage-destabilize-default, espionage-counter-default. After main agent fixes MapCanvas prop, re-run: (1) frontend Playwright to click a circle -> assert espionage-panel + 4 buttons + resource-hud, (2) POST /espionage-orders integration check, (3) TurnRecap mount on turn advance.",
+  "rca_of_the_issue": "MapCanvas.jsx line 97: `style={{ cursor: isDragging ? 'grabbing' : 'grab' }}`. Prop signature (lines 9–26) accepts 15 named props; `isDragging` is not among them. In App.js, `isDragging` is a local useState on line 67, never passed to <MapCanvas /> (App.js line ~2802). At first render inside MapCanvas, JS resolves `isDragging` against enclosing scope, finds none, throws ReferenceError. React CRA overlay catches it, hides the app. Reproduction: load app -> enter name Alice -> Create New Game -> click Start Game. Mitigation: 1-line prop addition `isDragging={isDragging}` in App.js MapCanvas render + adding `isDragging` to destructure in MapCanvas.jsx. Alternatively derive cursor state internally from a mouse-down ref."
+}

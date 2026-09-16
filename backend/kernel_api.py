@@ -608,7 +608,11 @@ def mount_kernel(app: FastAPI) -> None:
         # given viewer. This does NOT invent a second event log — it is the
         # kernel's own log filtered per player.
         m = await _require_match_async(game_id)
-        data = _call("recap", state=m["engine"], viewerId=player_id)
+        engine = m.get("engine") or {}
+        known_ids = {p.get("id") for p in (engine.get("players") or []) if p.get("id")}
+        if player_id not in known_ids:
+            raise HTTPException(status_code=404, detail="unknown player_id")
+        data = _call("recap", state=engine, viewerId=player_id)
         return data.get("recap") or {}
 
     @app.get("/api/games")

@@ -13,6 +13,7 @@ export default function MapCanvas({
   pendingRally,
   mapPan,
   mapZoom,
+  isDragging,
   selectedStarfleet,
   selectedSystem,
   getPlayerColor,
