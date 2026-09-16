@@ -994,10 +994,12 @@ function App() {
     const nextQueue = [...espionageQueue, item];
     setEspionageQueue(nextQueue);
     try {
-      await axios.post(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
-        player_id: currentPlayer,
-        orders: nextQueue,
+      const r = await fetch(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: currentPlayer, orders: nextQueue }),
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
     } catch (err) {
       console.warn('espionage POST failed', err);
       // rollback local state on server rejection
@@ -1010,10 +1012,12 @@ function App() {
     setEspionageQueue(nextQueue);
     if (!currentGame || !currentPlayer) return;
     try {
-      await axios.post(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
-        player_id: currentPlayer,
-        orders: nextQueue,
+      const r = await fetch(`${API_BASE}/api/game/${currentGame}/espionage-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: currentPlayer, orders: nextQueue }),
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
     } catch (err) {
       console.warn('espionage cancel POST failed', err);
     }

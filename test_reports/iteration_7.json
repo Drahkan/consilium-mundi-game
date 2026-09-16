@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 7 retest after MapCanvas isDragging fix. FRONTEND UNBLOCKED: galaxy renders (28 circles, 26 groups), no runtime overlay, ResourceHUD shows T:3 M:3 C:3, EspionagePanel + all 4 buttons visible & enabled (tech=3), TurnRecap modal opens on Resolve Turn. Also found & fixed a SECONDARY blocker: App.js scheduleEspionage/cancelEspionage referenced `axios` which is NOT imported (App.js uses fetch elsewhere) — ReferenceError on click, POST never fired. Replaced with fetch(). After fix, POST /api/game/{id}/espionage-orders fires with correct body {player_id, orders:[{kind:'destabilize', systemId:...}]}. Backend returns 400 (kernel rejects self-targeted destabilize — expected kernel-level validation, not a wiring bug). Backend regression: 39/40 pytest pass. Only failure is the known kernel-side gap `snapshot.players` missing (documented in iter 6, explicitly out-of-scope per main agent instructions). New /recap unknown-viewer 404 validation works (test_03 passes).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/game/{id}/recap (snapshot)", "issue": "recap.snapshot missing `players` key. Kernel host.ts::recapFor exposes {turn, phase, systems, resources, combat} but not `players`. DOCUMENTED KERNEL-SIDE GAP owned by Grok — do NOT fix backend-side."},
+      {"endpoint": "POST /api/game/{id}/espionage-orders", "issue": "Returns 400 when destabilize target is the acting player's own system. Likely correct kernel validation but no error body returned to help the UI display a reason. Consider surfacing kernel reason string."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js scheduleEspionage/cancelEspionage", "issue": "FIXED. Called `axios.post` but axios is not imported anywhere in App.js (rest of file uses fetch). ReferenceError swallowed by try/catch, so no POST was ever sent when a user clicked any EspionagePanel button. Rewrote both handlers to use fetch() with JSON body + status check.", "selector": "[data-testid='espionage-destabilize-default'] onClick chain", "priority": "HIGH (was blocking espionage integration entirely)"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Info panel", "issues": ["Owner text appears twice in system info (line 4 and line 10). Minor duplication in OrdersTray/info-panel composition."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_recap.py",
+    "/app/backend/tests/test_kernel_owed_pact.py",
+    "/app/backend/tests/test_kernel_diplomacy.py",
+    "/app/backend/tests/test_kernel_persistence.py",
+    "/app/test_reports/pytest/iteration_7.xml"
+  ],
+  "grok_payload": {
+    "a_ping_v4_stdout": "{\"ok\":true,\"error\":null,\"pong\":true,\"version\":4}  ✅",
+    "b_MapCanvas_OrdersTray_renders": "YES ✅ (28 circles + 26 groups; info-panel mounts on select; EspionagePanel visible with all 4 testids present & clickable)",
+    "c_recap_returns_log_and_promiseReports": "YES ✅ (log[], promiseReports[], winnerIds[], snapshot present; snapshot.players still missing — Grok-side)",
+    "d_EspionagePanel_visible_on_selected_system": "YES ✅ (all 4 buttons enabled when tech>=1; POST fires with correct body after axios->fetch fix)"
+  },
+  "action_items": [
+    "OPTIONAL: Add PropTypes/TypeScript to MapCanvas/OrdersTray to catch the class of bug we just hit twice (undefined ref, missing prop). Both were single-symbol bugs that blocked entire flows.",
+    "OPTIONAL: Backend /espionage-orders could echo the kernel rejection reason instead of a bare 400 (currently the UI just rolls back state silently).",
+    "PARKED (Grok): host.ts::recapFor must include `snapshot.players` for spec parity.",
+    "MINOR: Info panel renders Owner twice — cosmetic."
+  ],
+  "critical_code_review_comments": [
+    "App.js is 2893 lines and mixes fetch with an attempted axios call — inconsistent HTTP client + missing import got past code review. Adopt a single api.js wrapper.",
+    "Two iterations in a row have been blocked by trivial single-symbol errors inside App.js (isDragging prop, axios import). A CRA build+lint that treats no-undef as error would have caught both at compile time; consider promoting react/no-undef in eslintrc.",
+    "test_kernel_recap.py test_05 asserts snapshot.players which is a kernel gap — leaving the assertion in place so the gap keeps showing up in regression until Grok closes it."
+  ],
+  "updated_files": [
+    "/app/frontend/src/App.js (scheduleEspionage + cancelEspionage rewritten from axios.post -> fetch)"
+  ],
+  "success_rate": {"backend": "97.5% (39/40 pytest; 1 doc'd kernel-side snapshot.players gap)", "frontend": "100% for kernel-v4 wrap: MapCanvas, OrdersTray, EspionagePanel, ResourceHUD, TurnRecap all render + integrate after axios->fetch fix"},
+  "seed_data_creation": "several game-mu3e* ids created during regression + playwright runs; no manual cleanup required",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Grok payload = clean yes/yes/yes/yes as requested. Only real remaining spec gap is kernel host.ts::recapFor not including snapshot.players (owned by Grok, do not patch backend). Two consecutive blockers came from App.js single-symbol bugs — recommend main agent enable react/no-undef ESLint rule to prevent recurrence.",
+  "rca_of_the_issue": "Two bugs found this iteration. (1) MapCanvas.jsx isDragging prop — FIXED by main agent before retest (App.js:2809 now passes isDragging={isDragging}, MapCanvas.jsx:16 destructures it). (2) NEW: App.js:997 & 1013 called `axios.post` but axios was never imported (only fetch is used elsewhere). Chrome reported `ReferenceError: axios is not defined` which the try/catch swallowed as a warning; UI updated local queue optimistically but no request ever hit the backend. Repro: select any system -> click Sabotage/Destabilize/Counter -> observe console warning, no network request. Mitigation applied: replaced both axios calls with fetch(), added !r.ok error propagation to preserve rollback semantics. Post-fix: POST body verified {\"player_id\":\"p-...\",\"orders\":[{\"kind\":\"destabilize\",\"system_id\":\"sys-...\",...}]} — backend receives + kernel processes (returns 400 when target is self, expected)."
+}

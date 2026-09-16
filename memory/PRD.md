@@ -12,7 +12,44 @@ Kernel contract: `/app/KERNEL.md`. Collab contract: `/app/GROK_EMERGENT.md`.
 
 ## What's been implemented
 
-### 2026-02 — Kernel v3 wrap (Grok handoff #3)
+### 2026-02 — Kernel v4 wrap (Grok handoff #4)
+- Unpacked kernel v4 (`consilium-kernel-v4.zip`) byte-for-byte
+  (ping returns `version: 4`; `SAVE_VERSION` unchanged at 2).
+- Added `CHANGELOG.md`, `ui-reference/ESPIONAGE.md`, `ui-reference/TURN_RECAP.md`,
+  and copied `ui-reference/EspionagePanel.jsx` + `ui-reference/TurnRecap.jsx`
+  into `frontend/src/`.
+- **App.js real split:**
+  - `MapCanvas.jsx` — extracted `renderGalaxyMap` (357 lines, 16 named props
+    including `isDragging`). Kernel field names preserved verbatim.
+  - `OrdersTray.jsx` — extracted `renderOrdersPanel` + `renderOrderSummary` +
+    `renderBuildingPanel`. Also mounts the new `EspionagePanel` next to the
+    orders slot.
+  - `EspionagePanel.jsx` — dropped in from `ui-reference/`, wired via
+    `scheduleEspionage`/`cancelEspionage`/`confirmHostileEspionage`
+    callbacks. `POST /espionage-orders` now also calls `_persist` so
+    espionage queues survive backend restart.
+  - `TurnRecap.jsx` — dropped in from `ui-reference/`; App.js fetches
+    `/api/game/{id}/recap` when `gameState.turn` advances and renders
+    `<TurnRecap>` as a full-screen modal until dismissed.
+- **New backend route:** `GET /api/game/{id}/recap?player_id=` → CLI `recap`.
+  Returns `{ turn, previousTurn, phase, result, winnerIds, log,
+  promiseReports, snapshot, snapshotCount }`. Validates `player_id` against
+  `engine.players` (unknown → 404). No second event log.
+- **Confirm-before-hostile-espionage:** implemented client-side using
+  `sharedSightAllyIds` from the kernel inbox — if the target system's owner
+  is an ally, the panel shows `window.confirm(...)` with the
+  `hostileOrderWarning`-style text.
+- Verified via testing agent: **39/40 backend pytest** (only failure is a
+  kernel-side gap flagged back to Grok — see Notes) + frontend playwright
+  showing MapCanvas, OrdersTray, EspionagePanel, ResourceHUD, TurnRecap all
+  render and integrate (`/app/test_reports/iteration_7.json`).
+
+### Notes flagged back to Grok
+- **`recap.snapshot.players` is missing.** Kernel `host.ts::recapFor` currently
+  exposes `snapshot.{turn, phase, systems, resources, combat}` but not
+  `players`. Spec parity requires `players`.
+
+
 - Unpacked kernel v3 (`consilium-kernel-v3.zip`) byte-for-byte
   (`SAVE_VERSION = 3`, ping now returns `version: 3`).
 - Added `CHANGELOG.md` and `ui-reference/SHARED_SIGHT.md`.
