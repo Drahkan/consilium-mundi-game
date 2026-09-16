@@ -358,12 +358,21 @@ export interface SnapshotSystem {
   fleets: { ownerId: string; n: number }[];
 }
 
+export interface SnapshotPlayer {
+  id: string;
+  name: string;
+  civName: string;
+  colors: string[];
+}
+
 export interface TurnSnapshot {
   turn: number;
   phase: GamePhase;
   systems: SnapshotSystem[];
   resources: Record<string, Resources>;
   combat: { text: string; systemId?: string }[];
+  /** Slim admiralty list for recap/replay. Optional on pre-v5 blobs. */
+  players?: SnapshotPlayer[];
 }
 
 export interface GameState {

@@ -1,6 +1,15 @@
-import type { GameState, TurnSnapshot } from "./types";
+import type { GameState, SnapshotPlayer, TurnSnapshot } from "./types";
 
 export type { TurnSnapshot };
+
+export function slimPlayers(state: GameState): SnapshotPlayer[] {
+  return state.players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    civName: p.civ.name,
+    colors: [...p.civ.flag.colors],
+  }));
+}
 
 export function captureSnapshot(state: GameState): TurnSnapshot {
   return {
@@ -25,6 +34,7 @@ export function captureSnapshot(state: GameState): TurnSnapshot {
     combat: state.log
       .filter((l) => l.severity === "combat")
       .map((l) => ({ text: l.text, systemId: l.systemId })),
+    players: slimPlayers(state),
   };
 }
 

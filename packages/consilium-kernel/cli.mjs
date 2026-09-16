@@ -1599,6 +1599,14 @@ function evaluateDiplomacy(state, snapshot) {
 }
 
 // src/lib/game/snapshot.ts
+function slimPlayers(state) {
+  return state.players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    civName: p.civ.name,
+    colors: [...p.civ.flag.colors]
+  }));
+}
 function captureSnapshot(state) {
   return {
     turn: state.turn,
@@ -1619,7 +1627,8 @@ function captureSnapshot(state) {
       };
     }),
     resources: Object.fromEntries(state.players.map((p) => [p.id, { ...p.resources }])),
-    combat: state.log.filter((l) => l.severity === "combat").map((l) => ({ text: l.text, systemId: l.systemId }))
+    combat: state.log.filter((l) => l.severity === "combat").map((l) => ({ text: l.text, systemId: l.systemId })),
+    players: slimPlayers(state)
   };
 }
 function pushSnapshot(state) {
@@ -3810,6 +3819,9 @@ function tradeFrontierFor(state, senderId, recipientId) {
 }
 function recapFor(state, viewerId) {
   const snaps = state.turnSnapshots ?? [];
+  const raw = snaps.length ? snaps[snaps.length - 1] : null;
+  const players = slimPlayers(state);
+  const snapshot = raw ? { ...raw, players: raw.players?.length ? raw.players : players } : null;
   return {
     turn: state.turn,
     previousTurn: Math.max(1, state.turn - 1),
@@ -3820,8 +3832,9 @@ function recapFor(state, viewerId) {
     promiseReports: (state.promiseReports ?? []).filter(
       (r) => r.actorId === viewerId || r.otherId === viewerId
     ),
-    snapshot: snaps.length ? snaps[snaps.length - 1] : null,
-    snapshotCount: snaps.length
+    snapshot,
+    snapshotCount: snaps.length,
+    players
   };
 }
 function openMatch(args) {
@@ -4183,7 +4196,7 @@ function dispatch(req) {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 4 };
+      return { ok: true, error: null, pong: true, version: 5 };
     case "optionsForType":
       return {
         ok: true,

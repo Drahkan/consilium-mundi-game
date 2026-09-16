@@ -32,6 +32,7 @@ import { resolveTurn } from "./resolve";
 import { visionOf, playerKnown } from "./vision";
 import { unreadCount, sendThreadMessage, visibleThreads, legalTradeDestinations, tradeFrontier, acceptOffer, counterOffer, declineOffer, denounceAlliance, respondToIncident, schedulePactDelivery } from "./diplomacy";
 import { openIncidentsFor, unsentPactsFor, pactHalf, alliesOf } from "./alliance";
+import { slimPlayers } from "./snapshot";
 
 export function viewForPlayer(state: GameState, viewerId: string): GameState {
   const next = structuredClone(state);
@@ -298,6 +299,9 @@ export function tradeFrontierFor(
 /** Last-turn recap for one admiralty. Do not invent a second event log. */
 export function recapFor(state: GameState, viewerId: string) {
   const snaps = state.turnSnapshots ?? [];
+  const raw = snaps.length ? snaps[snaps.length - 1]! : null;
+  const players = slimPlayers(state);
+  const snapshot = raw ? { ...raw, players: raw.players?.length ? raw.players : players } : null;
   return {
     turn: state.turn,
     previousTurn: Math.max(1, state.turn - 1),
@@ -308,8 +312,9 @@ export function recapFor(state: GameState, viewerId: string) {
     promiseReports: (state.promiseReports ?? []).filter(
       (r) => r.actorId === viewerId || r.otherId === viewerId,
     ),
-    snapshot: snaps.length ? snaps[snaps.length - 1] : null,
+    snapshot,
     snapshotCount: snaps.length,
+    players,
   };
 }
 
