@@ -7,9 +7,11 @@ import ResourceHUD from './ResourceHUD';
 import MapCanvas from './MapCanvas';
 import OrdersTray from './OrdersTray';
 import TurnRecap from './TurnRecap';
+import SystemDetailsPanel from './SystemDetailsPanel';
 import useTurnTimer from './hooks/useTurnTimer';
 import useTurnRecap from './hooks/useTurnRecap';
 import useDiplomacyPouch from './hooks/useDiplomacyPouch';
+import useOrderSubmit from './hooks/useOrderSubmit';
 import { kernelPost } from './lib/kernelPost';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
@@ -125,6 +127,27 @@ function App() {
     reloadPlayers: () => loadGamePlayers(currentGame),
   });
 
+  // useOrderSubmit (kernel v5 slim-down) — owns submitOrders, submitBuildOrders,
+  // resolveTurn, autoSubmitAllPendingOrders. All routed through kernelPost.
+  // `loadGameState`/`loadGamePlayers` are declared later in the render body;
+  // wrap them in lazy arrows so we don't trip TDZ at hook-init time.
+  const { submitOrders, submitBuildOrders, resolveTurn } = useOrderSubmit({
+    apiBase: API_BASE,
+    currentGame,
+    currentPlayer,
+    starfleetOrders,
+    setStarfleetOrders,
+    buildOrders,
+    setBuildOrders,
+    playerBuildOrders,
+    setPlayerBuildOrders,
+    availablePlayers,
+    loadGameState: (...args) => loadGameState(...args),
+    loadGamePlayers: (...args) => loadGamePlayers(...args),
+    setLoading,
+    setError,
+  });
+
   // resolve-turn endpoint. Ref guard ensures we only fire once per turn.
 
   // Turn recap (kernel v4). Fetch when the turn number advances so the
@@ -167,24 +190,18 @@ function App() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/create-game`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_name: playerName,
-          config: {
-            num_players: numPlayersConfig,
-            galaxy_size: "standard",
-            turn_time_limit: 24,
-            turn_time_seconds: turnSecondsConfig,
-            fow_mode: fowModeConfig
-          }
-        })
+      const res = await kernelPost(`${API_BASE}/api/create-game`, {
+        player_name: playerName,
+        config: {
+          num_players: numPlayersConfig,
+          galaxy_size: "standard",
+          turn_time_limit: 24,
+          turn_time_seconds: turnSecondsConfig,
+          fow_mode: fowModeConfig,
+        },
       });
-
-      if (!response.ok) throw new Error('Failed to create game');
-
-      const data = await response.json();
+      if (!res.ok) throw new Error(res.error || 'Failed to create game');
+      const data = res.payload;
       setCurrentGame(data.game_id);
       setCurrentPlayer(data.player_id);
       // Testing mode stays OFF for real multi-player games; enable via header toggle if needed
@@ -208,16 +225,12 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/join-game`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_name: playerName, game_id: joinGameId.trim() })
+      const res = await kernelPost(`${API_BASE}/api/join-game`, {
+        player_name: playerName,
+        game_id: joinGameId.trim(),
       });
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.detail || 'Failed to join game');
-      }
-      const data = await response.json();
+      if (!res.ok) throw new Error(res.error || 'Failed to join game');
+      const data = res.payload;
       setCurrentGame(data.game_id);
       setCurrentPlayer(data.player_id);
       setTestingMode(false);
@@ -279,41 +292,25 @@ function App() {
   // player in the roster is ready the backend auto-resolves the turn.
   const setReady = async (ready) => {
     if (!currentGame || !currentPlayer) return;
-    try {
-      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/ready`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: currentPlayer, ready })
-      });
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
-        throw new Error(errBody.detail || 'Ready failed');
-      }
-      await loadGameState(currentGame, currentPlayer);
-      await loadGamePlayers(currentGame);
-    } catch (err) {
-      setError(err.message);
-    }
+    const res = await kernelPost(`${API_BASE}/api/game/${currentGame}/ready`, {
+      player_id: currentPlayer,
+      ready,
+    });
+    if (!res.ok) return;
+    await loadGameState(currentGame, currentPlayer);
+    await loadGamePlayers(currentGame);
   };
 
   // Rally point: designate a friendly system where this fleet should
   // fall back to on retreat. Pass null to clear.
   const setStarfleetRally = async (starfleetId, rallySystemId) => {
     if (!currentGame || !currentPlayer) return;
-    try {
-      const resp = await fetch(`${API_BASE}/api/game/${currentGame}/starfleets/${starfleetId}/rally`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: currentPlayer, rally_system_id: rallySystemId })
-      });
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
-        throw new Error(errBody.detail || 'Rally point update failed');
-      }
-      await loadGameState(currentGame, currentPlayer);
-    } catch (err) {
-      setError(err.message);
-    }
+    const res = await kernelPost(
+      `${API_BASE}/api/game/${currentGame}/starfleets/${starfleetId}/rally`,
+      { player_id: currentPlayer, rally_system_id: rallySystemId },
+    );
+    if (!res.ok) return;
+    await loadGameState(currentGame, currentPlayer);
   };
 
   // Reset everything back to the landing (create/join) screen. Used by
@@ -430,18 +427,12 @@ function App() {
     const aiNames = ['Admiral Zara', 'Commander Vex', 'Captain Nova'];
     
     for (let i = 0; i < 3; i++) {
-      try {
-        await fetch(`${API_BASE}/api/join-game`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            player_name: aiNames[i],
-            game_id: currentGame
-          })
-        });
-      } catch (err) {
-        console.error('Failed to add AI player:', err);
-      }
+      // AI join. kernelPost surfaces the kernel error string as a toast
+      // if the seat can't be claimed; we still continue to the next slot.
+      await kernelPost(`${API_BASE}/api/join-game`, {
+        player_name: aiNames[i],
+        game_id: currentGame,
+      });
     }
 
     // Reload game state and players
@@ -506,30 +497,6 @@ function App() {
   };
 
   // Submit starfleet orders
-  const submitOrders = async () => {
-    if (!currentGame || !currentPlayer) return;
-
-    try {
-      const orders = Object.values(starfleetOrders);
-      
-      const response = await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_id: currentPlayer,
-          orders: orders
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to submit orders');
-
-      setStarfleetOrders({});
-      alert('Orders submitted successfully!');
-      
-    } catch (err) {
-      setError(err.message);
-    }
-  };
 
   // Get current player's build orders
   const getCurrentPlayerBuildOrders = () => {
@@ -891,38 +858,6 @@ function App() {
   };
 
   // Submit build orders
-  const submitBuildOrders = async () => {
-    if (!currentGame || !currentPlayer) {
-      console.error('Missing currentGame or currentPlayer:', { currentGame, currentPlayer });
-      return;
-    }
-
-    try {
-      const orders = Object.values(buildOrders);
-      console.log('Submitting build orders:', orders);
-      
-      const response = await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_id: currentPlayer,
-          orders: orders
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to submit build orders: ${response.status} - ${errorText}`);
-      }
-
-      setBuildOrders({});
-      console.log('Build orders submitted successfully');
-      
-    } catch (err) {
-      console.error('Error submitting build orders:', err);
-      setError(err.message);
-    }
-  };
 
   // Espionage (kernel v4). Each schedule POSTs the whole queue so the
   // kernel sees a consistent set of intended actions this turn.
@@ -1305,80 +1240,8 @@ function App() {
   };
 
   // Resolve turn (for testing)
-  const resolveTurn = async () => {
-    if (!currentGame) return;
-
-    try {
-      setLoading(true);
-      
-      // Auto-submit pending orders for all players before resolving turn
-      await autoSubmitAllPendingOrders();
-      
-      const response = await fetch(`${API_BASE}/api/game/${currentGame}/resolve-turn`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to resolve turn');
-
-      alert('Turn resolved! All pending orders have been automatically submitted.');
-      await loadGameState(currentGame, currentPlayer);
-      await loadGamePlayers(currentGame);
-      
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Auto-submit pending orders for all players (called during turn resolution)
-  const autoSubmitAllPendingOrders = async () => {
-    // Submit orders for all players who have pending orders
-    for (const player of availablePlayers) {
-      const playerId = player.id;
-      
-      // Check if this player has pending starfleet orders
-      const playerStarfleetOrders = Object.keys(starfleetOrders).length > 0 && currentPlayer === playerId ? starfleetOrders : {};
-      
-      // Check if this player has pending build orders
-      const currentPlayerBuildOrders = playerBuildOrders[playerId] || {};
-      
-      try {
-        // Submit starfleet orders if any
-        if (Object.keys(playerStarfleetOrders).length > 0) {
-          const orders = Object.values(playerStarfleetOrders);
-          await fetch(`${API_BASE}/api/game/${currentGame}/orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              player_id: playerId,
-              orders: orders
-            })
-          });
-        }
-        
-        // Submit build orders if any
-        if (Object.keys(currentPlayerBuildOrders).length > 0) {
-          const orders = Object.values(currentPlayerBuildOrders);
-          await fetch(`${API_BASE}/api/game/${currentGame}/build-orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              player_id: playerId,
-              orders: orders
-            })
-          });
-        }
-      } catch (err) {
-        console.warn(`Failed to auto-submit orders for player ${playerId}:`, err);
-      }
-    }
-    
-    // Clear all pending orders after auto-submission
-    setStarfleetOrders({});
-    setPlayerBuildOrders({});
-    setBuildOrders({});
-  };
 
   // Get player color
   const getPlayerColor = (playerId) => {
@@ -1632,179 +1495,7 @@ function App() {
   // renderGalaxyMap was moved to MapCanvas.jsx (Grok App.js split).
 
   // Render system details
-  const renderSystemDetails = () => {
-    if (!selectedSystem || !gameState) return null;
-
-    const system = gameState.systems[selectedSystem];
-    if (!system) return null;
-
-    const vis = system.visibility || 'full';
-
-    if (vis === 'hidden') {
-      return (
-        <div className="system-details" data-testid="system-details">
-          <h3 style={{ fontStyle: 'italic', color: '#94a3b8' }}>Unknown Space</h3>
-          <div className="system-info">
-            <p style={{ color: '#94a3b8' }}>
-              Your scanners cannot penetrate this region of the galaxy. Move a starfleet or capture a neighbouring system to reveal what lies here.
-            </p>
-            <p style={{ fontSize: 12, color: '#64748b' }}>Connections: {system.connections?.length || 0}</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (vis === 'partial') {
-      return (
-        <div className="system-details" data-testid="system-details">
-          <h3>{system.name} <span style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>(long-range scan)</span></h3>
-          <div className="system-info">
-            <p><strong>Owner:</strong> {system.has_owner ? 'Claimed by a rival' : 'Uncontrolled'}</p>
-            <p><strong>Upgrades:</strong> {system.has_upgrades ? 'One or more (details unknown)' : 'None detected'}</p>
-            <p style={{ color: '#94a3b8', fontStyle: 'italic', marginTop: 8 }}>
-              Fleet strength, resources and specific upgrades cannot be resolved at this range.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="system-details" data-testid="system-details">
-        <h3>{system.name}</h3>
-        <div className="system-info">
-          <p><strong>Owner:</strong> {
-            system.owner
-              ? getPlayerName(system.owner)
-              : 'Uncontrolled'
-          }</p>
-          <p><strong>Resources per turn:</strong></p>
-          <ul>
-            <li>Tech: {system.resources?.tech ?? 0}</li>
-            <li>Metals: {system.resources?.metals ?? 0}</li>
-            <li>CHON: {system.resources?.chon ?? 0}</li>
-          </ul>
-          <p><strong>Starfleets:</strong> {system.starfleets}</p>
-          <p><strong>Upgrades:</strong> {system.upgrades.join(', ') || 'None'}</p>
-          {system.is_home_system && <p className="home-system-badge">Home System</p>}
-          
-          {/* Show starfleet details */}
-          {system.starfleet_details && system.starfleet_details.length > 0 && (
-            <div className="starfleet-section">
-              <h4>Starfleets:</h4>
-              {system.starfleet_details.map(starfleet => {
-                const ownedByMe = starfleet.owner === currentPlayer;
-                // Options for rally point: all systems the current player owns
-                const ownedSystems = ownedByMe
-                  ? Object.values(gameState.systems).filter(s => s.owner === currentPlayer)
-                  : [];
-                return (
-                  <div
-                    key={starfleet.id}
-                    className={`starfleet-item ${selectedStarfleet === starfleet.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedStarfleet(starfleet.id)}
-                  >
-                    {starfleet.orders && (
-                      <p><strong>Orders:</strong> {starfleet.orders.type}</p>
-                    )}
-                    {starfleetOrders[starfleet.id] && (
-                      <p className="pending-order">
-                        <strong>Pending:</strong> {starfleetOrders[starfleet.id].order_type}
-                      </p>
-                    )}
-                    {ownedByMe && (() => {
-                      // Staged rally selection. Matches the movement
-                      // UX tone: pick a target, see a ghost preview
-                      // on the map, commit with a Set button (or
-                      // reset back to the currently-saved value).
-                      const committed = starfleet.rally_point || '';
-                      const raw = pendingRally[starfleet.id];
-                      // Normalize 'CLEAR' -> '' so both dropdown value
-                      // and diff-check share the same domain.
-                      const staged = raw === undefined ? committed : (raw === 'CLEAR' ? '' : raw);
-                      const isDirty = staged !== committed;
-                      const commit = () => {
-                        const next = staged === '' ? null : staged;
-                        setPendingRally(prev => {
-                          const copy = { ...prev };
-                          delete copy[starfleet.id];
-                          return copy;
-                        });
-                        setStarfleetRally(starfleet.id, next);
-                      };
-                      const reset = () => {
-                        setPendingRally(prev => {
-                          const copy = { ...prev };
-                          delete copy[starfleet.id];
-                          return copy;
-                        });
-                      };
-                      return (
-                        <div
-                          style={{ marginTop: 8 }}
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`rally-row-${starfleet.id}`}
-                        >
-                          <label style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>
-                            Rally point (on retreat)
-                          </label>
-                          <select
-                            value={staged}
-                            onChange={(e) => setPendingRally(prev => ({
-                              ...prev,
-                              [starfleet.id]: e.target.value === '' ? 'CLEAR' : e.target.value,
-                            }))}
-                            className="player-name-input"
-                            style={{ marginTop: 4, fontSize: 12 }}
-                            data-testid={`rally-select-${starfleet.id}`}
-                          >
-                            <option value="">— None (stay put) —</option>
-                            {ownedSystems.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                          </select>
-                          {isDirty && (
-                            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                              <button
-                                onClick={commit}
-                                className="rally-set-btn"
-                                data-testid={`rally-set-${starfleet.id}`}
-                              >
-                                Set Rally
-                              </button>
-                              <button
-                                onClick={reset}
-                                className="rally-reset-btn"
-                                data-testid={`rally-reset-${starfleet.id}`}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          
-          {/* Build controls for owned systems */}
-          {system.owner === currentPlayer && (
-            <div className="build-controls">
-              <button 
-                onClick={() => setShowBuildPanel(!showBuildPanel)}
-                className="build-toggle-btn"
-              >
-                {showBuildPanel ? 'Hide Building' : 'Show Building'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  // renderSystemDetails moved to SystemDetailsPanel.jsx (kernel v5 slim-down).
 
   // Render combat reports (filtered per player)
   const renderCombatReports = () => {
@@ -2764,7 +2455,20 @@ function App() {
           </div>
           
           <div className="info-panel">
-            {renderSystemDetails()}
+            <SystemDetailsPanel
+              gameState={gameState}
+              currentPlayer={currentPlayer}
+              selectedSystem={selectedSystem}
+              selectedStarfleet={selectedStarfleet}
+              setSelectedStarfleet={setSelectedStarfleet}
+              starfleetOrders={starfleetOrders}
+              pendingRally={pendingRally}
+              setPendingRally={setPendingRally}
+              getPlayerName={getPlayerName}
+              setStarfleetRally={setStarfleetRally}
+              showBuildPanel={showBuildPanel}
+              setShowBuildPanel={setShowBuildPanel}
+            />
             {renderCombatReports()}
             <OrdersTray
               gameState={gameState}

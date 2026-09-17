@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { kernelPost } from './lib/kernelPost';
 
 // Ported from ui-reference/play-screen.tsx (IncidentDialog + unsent-pact banner)
 // per ui-reference/OBLIGATIONS.md.
@@ -80,16 +80,10 @@ export default function ObligationsHUD({ apiBase, gameId, me, gameState, reload,
   const post = async (action, body) => {
     setBusy(true);
     try {
-      const r = await fetch(`${apiBase}/api/game/${gameId}/diplomacy/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: me, ...body }),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        const detail = err?.detail || err?.error || `Diplomacy op failed (${r.status})`;
-        toast.error(String(detail));
-      }
+      await kernelPost(
+        `${apiBase}/api/game/${gameId}/diplomacy/${action}`,
+        { player_id: me, ...body },
+      );
       await refresh();
       if (reload) await reload();
     } finally {

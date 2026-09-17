@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { kernelPost } from './lib/kernelPost';
 
 // Templated diplomacy pouch — ported from ui-reference/diplomacy-modal.tsx.
 // No free-text chat: every dispatch is a structured, templated offer. Trade
@@ -94,22 +94,16 @@ export default function DiplomacyPouch({ apiBase, gameId, me, gameState, players
     setErr(null);
     setBusy(true);
     try {
-      const resp = await fetch(`${apiBase}/api/game/${gameId}/diplomacy/${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: me, ...body }),
-      });
-      if (!resp.ok) {
-        const e = await resp.json().catch(() => ({}));
-        const detail = e.detail || e.error || 'Diplomatic action failed';
-        toast.error(String(detail));
-        throw new Error(detail);
+      const res = await kernelPost(
+        `${apiBase}/api/game/${gameId}/diplomacy/${path}`,
+        { player_id: me, ...body },
+      );
+      if (!res.ok) {
+        setErr(res.error);
+        return false;
       }
       await reload();
       return true;
-    } catch (e) {
-      setErr(e.message);
-      return false;
     } finally {
       setBusy(false);
     }
