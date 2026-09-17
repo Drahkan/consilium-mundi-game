@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 9 review of Grok's three hosting-only asks (SystemDetailsPanel + useOrderSubmit extraction, kernelPost wrapper, WDS noise silencer). All 41 backend pytest tests pass (test_kernel_recap, test_kernel_owed_pact, test_kernel_persistence, test_kernel_diplomacy). ESLint clean on App.js + jsx + hooks + lib. Kernel ping returns v5, SAVE_VERSION=2 unchanged. Frontend UI regression suite green: map renders 28 circles after Create->Start (no TDZ regression), SystemDetailsPanel shows exactly ONE 'Owner:' (starfleet cards have 0 duplicates), Ready toggle + auto-resolve produced Turn 1 recap end-to-end, espionage-destabilize on OWN system produced sonner toast with verbatim kernel detail 'Target an enemy system.' and map continued rendering. WDS console noise is fully suppressed (0 matches for webpack-dev-server/WebSocketClient/ws://localhost) while a manually-triggered console.error('kernel test error') remained visible - filter is narrow, not global. Raw POST fetches remaining in frontend/src: only /start (App.js:251) and /timer (App.js:276), as expected. App.js line count 2538 (<=2550 target).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_recap.py",
+    "/app/backend/tests/test_kernel_owed_pact.py",
+    "/app/backend/tests/test_kernel_persistence.py",
+    "/app/backend/tests/test_kernel_diplomacy.py",
+    "/app/test_reports/pytest/iter9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js is still 2538 lines - continue extracting components/hooks (MapCanvas, OrdersTray, DiplomacyPouch already flagged as staying, but the 4 lobby/game-lifecycle handlers at top of App.js and the resolve/timer effects could form a useGameLifecycle hook next pass).",
+    "kernelPost.js swallows non-JSON error bodies silently (json().catch(()=>({}))); consider also toasting resp.statusText when detail is missing for better observability.",
+    "silenceWdsNoise.js patches console methods globally at module import; document that ordering (imported before App in index.js) is load-bearing and add a comment/eslint rule to guard against accidental reordering."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (41/41)", "frontend": "100% (all critical flows verified)"},
+  "seed_data_creation": "None (games created in-flight via UI test only)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter 9 payload for Grok: (a) wc -l frontend/src/App.js => 2538. (b) Remaining raw POST sites: ONLY App.js:251 (/start) and App.js:276 (/timer) - list is empty for kernel-mutating routes. (c) Map renders after Create->Start: CONFIRMED (28 <circle> nodes under .galaxy-section svg). Ready->Resolve auto-resolves at 3/3 and shows Turn 1 recap. Sonner toast for own-system destabilize shows 'Target an enemy system.' verbatim. WDS filter is narrow (kernel test error still visible). No TDZ regressions detected. All 4 kernel pytest suites pass unchanged.",
+  "rca of the issue": "N/A - no bugs found this iteration."
+}

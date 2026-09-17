@@ -12,7 +12,31 @@ Kernel contract: `/app/KERNEL.md`. Collab contract: `/app/GROK_EMERGENT.md`.
 
 ## What's been implemented
 
+### 2026-02 — Kernel v5 hosting slim-down (no new zip)
+- **App.js split (task 1)**: extracted `SystemDetailsPanel.jsx` (194 lines)
+  and `hooks/useOrderSubmit.js` (owns `submitOrders`,
+  `submitBuildOrders`, `resolveTurn`, `autoSubmitAllPendingOrders`).
+  App.js is now **2538 lines** (was 2834). MapCanvas / OrdersTray /
+  DiplomacyPouch / ObligationsHUD / EspionagePanel / TurnRecap / ResourceHUD
+  unchanged. TDZ landmine on `loadGameState`/`loadGamePlayers` caught during
+  the pass and fixed with lazy prop wrappers.
+- **kernelPost everywhere (task 2)**: every kernel-mutating POST in the
+  frontend now routes through `frontend/src/lib/kernelPost.js` so 400s
+  toast the kernel `detail` verbatim. Zero raw fetch remains on kernel
+  routes; only hosting-only `/start` and `/timer` stay on raw fetch (no
+  kernel op). Covers create-game, join-game, ready, rally, orders,
+  build-orders, resolve-turn, add-ai, DiplomacyPouch, ObligationsHUD,
+  espionage.
+- **WDS noise silenced (task 3)**: `frontend/src/lib/silenceWdsNoise.js`
+  imported by `index.js` before `App` — narrowly filters
+  `webpack-dev-server` / `WebSocketClient` / `ws://localhost` strings on
+  `console.error|warn|log|info`. Real kernel and application errors are
+  still logged.
+- Verified via testing agent: **41/41 backend pytest** + all frontend
+  flows green (`/app/test_reports/iteration_9.json`).
+
 ### 2026-02 — Kernel v5 wrap (Grok handoff #5)
+
 - Unpacked kernel v5 (`consilium-kernel-v5.zip`) byte-for-byte
   (ping returns `version: 5`; `SAVE_VERSION` unchanged at 2).
 - **Grok v5 gap closed:** `recap.snapshot.players` and top-level
