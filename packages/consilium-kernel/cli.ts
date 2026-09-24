@@ -7,7 +7,7 @@
  * { "ok": true, "state": GameState, "view": GameState?, "error": null, ... }
  */
 import type { GameState } from "./types";
-import { optionsForType } from "./constants";
+import { listGameTypes, optionsForType } from "./constants";
 import { presetCivs, randomCiv } from "./civs";
 import { randomSeed } from "./mapgen";
 import {
@@ -75,7 +75,9 @@ function dispatch(req: Req): unknown {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 5 };
+      return { ok: true, error: null, pong: true, version: 6 };
+    case "listGameTypes":
+      return { ok: true, error: null, gameTypes: listGameTypes() };
     case "optionsForType":
       return {
         ok: true,

@@ -34,6 +34,27 @@ player_index: Dict[str, Dict[str, Any]] = {}
 # Persistence hook. Set by server.py at startup via set_dao(dao).
 _dao = None
 
+# Cached kernel game types (populated lazily on first request).
+_game_types_cache: Optional[List[Dict[str, Any]]] = None
+
+
+def _game_types() -> List[Dict[str, Any]]:
+    """Fetch the kernel's canonical game type list. Cached process-wide."""
+    global _game_types_cache
+    if _game_types_cache is None:
+        data = kernel("listGameTypes")
+        _game_types_cache = data.get("gameTypes") or []
+    return _game_types_cache
+
+
+def _victory_label(victory_id: Optional[str]) -> Optional[str]:
+    if not victory_id:
+        return None
+    for row in _game_types():
+        if row.get("victory") == victory_id:
+            return row.get("victoryLabel")
+    return None
+
 
 def set_dao(dao) -> None:
     global _dao
@@ -219,11 +240,27 @@ def _legacy_view(m: Dict[str, Any], player_id: Optional[str]) -> Dict[str, Any]:
         turnPausedRemaining=m.get("turn_paused_remaining", 0),
         started=m.get("started", False),
     )
-    return data["view"]
+    view = data["view"]
+    # Expose kernel scenario options to the HUD (victory chip, fog toggle, etc.)
+    # per ui-reference/GAME_TYPES.md. Do NOT reinterpret rules here.
+    opts = (m.get("engine") or {}).get("options") or {}
+    if opts:
+        kernel_view = view.setdefault("kernel", {})
+        kernel_view["options"] = {
+            **opts,
+            "victoryLabel": _victory_label(opts.get("victory")),
+        }
+    return view
 
 
 def mount_kernel(app: FastAPI) -> None:
     """Register kernel-backed routes on the existing FastAPI app."""
+
+    @app.get("/api/game-types")
+    async def list_game_types():
+        # CLI listGameTypes is the source of truth (id/name/blurb/victory/
+        # victoryLabel/playerRange/fogOfWar/uncharted/turnLimit/etc.).
+        return {"gameTypes": _game_types()}
 
     @app.post("/api/create-game")
     async def create_game(request: CreateGameRequest):

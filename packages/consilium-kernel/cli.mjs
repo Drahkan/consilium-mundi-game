@@ -83,6 +83,13 @@ var HOME_DEV = {
     upgrades: ["colony", "shipyard", "starport", "mining", "wormhole"]
   }
 };
+var VICTORY_LABEL = {
+  standard: "Standard (50% of systems)",
+  galacticDomination: "Galactic Domination",
+  lastStanding: "Last Civilization Standing",
+  corporate: "Corporate Takeover",
+  gunship: "Gunship Diplomacy"
+};
 var GAME_TYPE_META = {
   standard: {
     name: "Standard",
@@ -205,6 +212,24 @@ var GAME_TYPE_META = {
     }
   }
 };
+function listGameTypes() {
+  return Object.keys(GAME_TYPE_META).map((id) => {
+    const meta = GAME_TYPE_META[id];
+    return {
+      id,
+      name: meta.name,
+      blurb: meta.blurb,
+      victory: meta.options.victory,
+      victoryLabel: VICTORY_LABEL[meta.options.victory],
+      playerRange: meta.options.playerRange,
+      fogOfWar: meta.options.fogOfWar,
+      uncharted: meta.options.uncharted,
+      turnLimit: meta.options.turnLimit,
+      disableCommunications: meta.options.disableCommunications,
+      scorchedEarth: meta.options.scorchedEarth
+    };
+  });
+}
 function optionsForType(type, playerCount) {
   const meta = type === "custom" ? GAME_TYPE_META.standard : GAME_TYPE_META[type];
   const [lo] = PLAYER_RANGE_BOUNDS[meta.options.playerRange];
@@ -3900,11 +3925,13 @@ var UPGRADE_FROM_LEGACY = {
 };
 function optionsFromLegacy(cfg = {}) {
   const n = Math.max(3, Math.min(10, cfg.num_players ?? 4));
+  const raw = cfg.game_type ?? "standard";
+  const type = raw === "custom" || raw in GAME_TYPE_META ? raw : "standard";
   const size = cfg.galaxy_size ?? "standard";
   const density = size === "small" ? "light" : size === "large" ? "heavy" : "standard";
-  const fog = (cfg.fow_mode ?? "basic") !== "off";
   const playerRange = n <= 5 ? "3-5" : n <= 6 ? "4-6" : n <= 8 ? "5-8" : "6-10";
-  const base = optionsForType("standard", n);
+  const base = optionsForType(type === "custom" ? "standard" : type, n);
+  const fog = cfg.fow_mode === void 0 ? base.fogOfWar : cfg.fow_mode !== "off";
   return {
     ...base,
     playerRange,
@@ -3912,9 +3939,7 @@ function optionsFromLegacy(cfg = {}) {
     systemDensity: density,
     homeDensity: density === "heavy" ? "standard" : density,
     fogOfWar: fog,
-    uncharted: false,
-    turnDuration: "none",
-    turnLimit: "none"
+    turnDuration: "none"
   };
 }
 function openMatchLegacy(args) {
@@ -4196,7 +4221,9 @@ function dispatch(req) {
   const op = req.op;
   switch (op) {
     case "ping":
-      return { ok: true, error: null, pong: true, version: 5 };
+      return { ok: true, error: null, pong: true, version: 6 };
+    case "listGameTypes":
+      return { ok: true, error: null, gameTypes: listGameTypes() };
     case "optionsForType":
       return {
         ok: true,

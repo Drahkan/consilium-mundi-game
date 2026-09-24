@@ -9,11 +9,12 @@ import type {
   Fleet,
   GameOptions,
   GameState,
+  GameTypeId,
   Resources,
   Upgrade,
 } from "./types";
 import { ZERO } from "./types";
-import { optionsForType } from "./constants";
+import { GAME_TYPE_META, optionsForType } from "./constants";
 import { presetCivs } from "./civs";
 import { randomSeed } from "./mapgen";
 import {
@@ -55,17 +56,22 @@ export interface LegacyConfig {
   turn_time_limit?: number;
   turn_time_seconds?: number;
   fow_mode?: string;
+  game_type?: string;
 }
 
 export function optionsFromLegacy(cfg: LegacyConfig = {}): GameOptions {
   const n = Math.max(3, Math.min(10, cfg.num_players ?? 4));
+  const raw = cfg.game_type ?? "standard";
+  const type: GameTypeId =
+    raw === "custom" || raw in GAME_TYPE_META ? (raw as GameTypeId) : "standard";
   const size = cfg.galaxy_size ?? "standard";
   const density =
     size === "small" ? "light" : size === "large" ? "heavy" : "standard";
-  const fog = (cfg.fow_mode ?? "basic") !== "off";
   const playerRange: GameOptions["playerRange"] =
     n <= 5 ? "3-5" : n <= 6 ? "4-6" : n <= 8 ? "5-8" : "6-10";
-  const base = optionsForType("standard", n);
+  const base = optionsForType(type === "custom" ? "standard" : type, n);
+  const fog =
+    cfg.fow_mode === undefined ? base.fogOfWar : cfg.fow_mode !== "off";
   return {
     ...base,
     playerRange,
@@ -73,9 +79,7 @@ export function optionsFromLegacy(cfg: LegacyConfig = {}): GameOptions {
     systemDensity: density,
     homeDensity: density === "heavy" ? "standard" : density,
     fogOfWar: fog,
-    uncharted: false,
     turnDuration: "none",
-    turnLimit: "none",
   };
 }
 

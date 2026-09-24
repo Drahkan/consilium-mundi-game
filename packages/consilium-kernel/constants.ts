@@ -299,6 +299,25 @@ export const GAME_TYPE_META: Record<
   },
 };
 
+export function listGameTypes() {
+  return (Object.keys(GAME_TYPE_META) as Exclude<GameTypeId, "custom">[]).map((id) => {
+    const meta = GAME_TYPE_META[id];
+    return {
+      id,
+      name: meta.name,
+      blurb: meta.blurb,
+      victory: meta.options.victory,
+      victoryLabel: VICTORY_LABEL[meta.options.victory],
+      playerRange: meta.options.playerRange,
+      fogOfWar: meta.options.fogOfWar,
+      uncharted: meta.options.uncharted,
+      turnLimit: meta.options.turnLimit,
+      disableCommunications: meta.options.disableCommunications,
+      scorchedEarth: meta.options.scorchedEarth,
+    };
+  });
+}
+
 export function optionsForType(type: GameTypeId, playerCount?: number): GameOptions {
   const meta =
     type === "custom" ? GAME_TYPE_META.standard : GAME_TYPE_META[type];

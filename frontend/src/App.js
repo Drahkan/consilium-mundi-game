@@ -56,7 +56,12 @@ function App() {
   // admiralty. Each item mirrors the kernel `applyEspionage` args.
   const [espionageQueue, setEspionageQueue] = useState([]);
   const [turnSecondsConfig, setTurnSecondsConfig] = useState(300); // 5 min default
-  const [fowModeConfig, setFowModeConfig] = useState('basic'); // 'off' | 'basic'
+  // fow_mode is now a scenario override. 'default' → omit from create-game
+  // so the kernel's game-type default applies (per ui-reference/GAME_TYPES.md).
+  const [fowModeConfig, setFowModeConfig] = useState('default'); // 'default' | 'off' | 'basic'
+  // Scenario picker (kernel v6). Populated by GET /api/game-types.
+  const [gameTypeConfig, setGameTypeConfig] = useState('standard');
+  const [gameTypes, setGameTypes] = useState([]);
   const [copiedFlag, setCopiedFlag] = useState(false);
   const lobbyPollRef = useRef(null);
   
@@ -93,6 +98,21 @@ function App() {
       setLandingMode('join');
     }
     if (name) setPlayerName(name);
+  }, []);
+
+  // Load scenario catalog (kernel v6). One-shot on mount so the lobby
+  // dropdown, HUD chip, and end screen all share a single source.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/game-types`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setGameTypes(d.gameTypes || []);
+      } catch (_) { /* offline is fine */ }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Poll game state:
@@ -190,15 +210,20 @@ function App() {
     setError(null);
 
     try {
+      const cfg = {
+        num_players: numPlayersConfig,
+        galaxy_size: "standard",
+        turn_time_limit: 24,
+        turn_time_seconds: turnSecondsConfig,
+        game_type: gameTypeConfig,
+      };
+      // Per ui-reference/GAME_TYPES.md: only send fow_mode when the user
+      // explicitly overrode the scenario default. Otherwise the kernel's
+      // game-type default (e.g. Ragnarok fog on) applies.
+      if (fowModeConfig !== 'default') cfg.fow_mode = fowModeConfig;
       const res = await kernelPost(`${API_BASE}/api/create-game`, {
         player_name: playerName,
-        config: {
-          num_players: numPlayersConfig,
-          galaxy_size: "standard",
-          turn_time_limit: 24,
-          turn_time_seconds: turnSecondsConfig,
-          fow_mode: fowModeConfig,
-        },
+        config: cfg,
       });
       if (!res.ok) throw new Error(res.error || 'Failed to create game');
       const data = res.payload;
@@ -2105,6 +2130,32 @@ function App() {
               {landingMode === 'create' ? (
                 <>
                   <label style={{ display: 'block', textAlign: 'left', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0.5rem 0 0.25rem 2px' }}>
+                    Scenario
+                  </label>
+                  <select
+                    value={gameTypeConfig}
+                    onChange={(e) => setGameTypeConfig(e.target.value)}
+                    className="player-name-input"
+                    data-testid="landing-game-type"
+                  >
+                    {(gameTypes.length ? gameTypes : [{ id: 'standard', name: 'Standard', victoryLabel: 'Standard (50% of systems)' }]).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} — {t.victoryLabel}
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const cur = gameTypes.find((t) => t.id === gameTypeConfig);
+                    return cur?.blurb ? (
+                      <p
+                        data-testid="landing-game-type-blurb"
+                        style={{ color: '#94a3b8', fontSize: 12, margin: '0.35rem 2px 0', textAlign: 'left', fontStyle: 'italic' }}
+                      >
+                        {cur.blurb}
+                      </p>
+                    ) : null;
+                  })()}
+                  <label style={{ display: 'block', textAlign: 'left', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0.75rem 0 0.25rem 2px' }}>
                     Players in this game
                   </label>
                   <select
@@ -2140,6 +2191,7 @@ function App() {
                     className="player-name-input"
                     data-testid="landing-fow-mode"
                   >
+                    <option value="default">Scenario default (recommended)</option>
                     <option value="basic">Basic — reveal 1 jump from owned systems</option>
                     <option value="off">Off — full galaxy visible (demo/dev)</option>
                   </select>
@@ -2199,6 +2251,34 @@ function App() {
               Turn {gameState?.turn} - {gameState?.phase}
               <ResourceHUD resources={gameState?.player_resources} />
             </span>
+            {(() => {
+              // Victory chip (kernel v6). Reads kernel.options.victoryLabel /
+              // victory from the state view. Do NOT recompute the label here —
+              // the backend attaches the kernel's own value.
+              const opts = gameState?.kernel?.options;
+              const label = opts?.victoryLabel || opts?.victory;
+              if (!label) return null;
+              return (
+                <span
+                  data-testid="hud-victory-chip"
+                  title="Victory condition for this scenario"
+                  style={{
+                    marginLeft: 12,
+                    padding: '2px 10px',
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    borderRadius: 999,
+                    border: '1px solid rgba(148,163,184,0.35)',
+                    background: 'rgba(15,23,42,0.55)',
+                    color: '#e2e8f0',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {label}
+                </span>
+              );
+            })()}
             {secondsRemaining !== null && gameState?.phase === 'activity' && (() => {
               const mm = String(Math.floor(secondsRemaining / 60)).padStart(2, '0');
               const ss = String(secondsRemaining % 60).padStart(2, '0');
