@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 10 verified kernel v6 game-types handoff: GET /api/game-types returns 6 rows with expected IDs [standard,ragnarok,reckoning,weekend,tradeWars,postApocalypse] and all required fields (id,name,blurb,victory,victoryLabel,playerRange,fogOfWar,uncharted,turnLimit,disableCommunications,scorchedEarth). POST /api/create-game with game_type=ragnarok yields kernel.options.victory=lastStanding, victoryLabel='Last Civilization Standing', fogOfWar=true, disableCommunications=true, scorchedEarth=true, turnLimit=40, gameType=ragnarok. tradeWars => corporate/'Corporate Takeover'. postApocalypse => gunship/'Gunship Diplomacy' + fogOfWar+uncharted true. game_type omitted or 'standard' => standard/'Standard (50% of systems)'. fow_mode='off' override on ragnarok is applied (config.fow_mode reflected in view). Regression flow (create->add-ai->start->orders->build-orders->espionage-orders->diplomacy send->timer pause/resume->resolve-turn) on a ragnarok game returns 200 across the board. Frontend lobby: landing-game-type renders all 6 scenarios, landing-game-type-blurb updates per scenario, landing-fow-mode has 'Scenario default (recommended)' -> 'default'. End-to-end UI: creating a Ragnarok game and clicking 'Start with AI' brings the HUD victory chip (data-testid=hud-victory-chip) into view during 'activity' phase reading 'LAST CIVILIZATION STANDING'. Kernel ping returns pong=true, version=6.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_kernel_game_types.py",
+    "/app/test_reports/pytest/iter10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_game_types_cache in kernel_api.py is process-wide and never invalidated; if kernel/cli.mjs is hot-swapped without a backend restart the cache will serve stale scenario metadata. Acceptable for now but worth a comment.",
+    "_legacy_view decorates view.kernel.options only when engine.options is truthy; if a future kernel state ever ships options={} the victory chip will silently disappear. Consider setting the kernel_view['options'] dict unconditionally with .get() fallbacks."
+  ],
+  "updated_files": ["/app/backend/tests/test_kernel_game_types.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all critical UI flows verified)"},
+  "seed_data_creation": "Games created in-flight via test only; TEST_ prefixed host name.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kernel v6 landed. New backend test file /app/backend/tests/test_kernel_game_types.py covers list_game_types + 4 scenario configs (ragnarok/tradeWars/postApocalypse/standard) + fow override + full regression POST plumbing on a ragnarok game. HUD chip verified live at data-testid='hud-victory-chip' showing 'Last Civilization Standing' after Create->Start with AI on Plan Ragnarok. Landing selectors: landing-game-type, landing-game-type-blurb, landing-fow-mode, landing-create-btn; lobby start button testid is 'lobby-start-with-ai' (AIs auto-added at lobby entry, hence 3/3 shown immediately).",
+  "rca of the issue": "N/A"
+}

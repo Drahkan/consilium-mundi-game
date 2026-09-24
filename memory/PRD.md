@@ -12,6 +12,35 @@ Kernel contract: `/app/KERNEL.md`. Collab contract: `/app/GROK_EMERGENT.md`.
 
 ## What's been implemented
 
+### 2026-02 — Kernel v6 scenarios (Grok handoff #6)
+
+- Unpacked kernel v6 (`consilium-kernel-v6.zip`) byte-for-byte
+  (ping returns `version: 6`; `SAVE_VERSION` unchanged at 2). Added
+  `CHANGELOG.md`, `ui-reference/GAME_TYPES.md`, `ui-reference/GameTypeSelect.jsx`.
+- **Backend (`kernel_api.py`):**
+  - New route `GET /api/game-types` → CLI `listGameTypes` (process-cached).
+  - `_legacy_view` now decorates `view.kernel.options` with
+    `state.options` plus a derived `victoryLabel` (looked up from the
+    game-types catalog). Rules stay in the kernel.
+- **Frontend (`App.js`):**
+  - New `gameTypeConfig` + `gameTypes` state. `useEffect` fetches
+    `/api/game-types` on mount.
+  - Lobby renders a `Scenario` dropdown (`landing-game-type`) with all
+    6 scenarios and the blurb (`landing-game-type-blurb`).
+  - `fow_mode` is now an override: new option
+    `Scenario default (recommended)` (value `default`) tells the client
+    to omit `fow_mode` from `create-game` so the kernel's type default
+    applies (Ragnarok fog on, Post-Apocalypse fog+uncharted, etc.).
+  - HUD victory chip (`hud-victory-chip`) reads
+    `gameState.kernel.options.victoryLabel` and sits next to the turn
+    timer during `activity`.
+  - Player-seat range kept at 3–4 and `turn_time_seconds` untouched per
+    Grok's spec.
+- Verified via testing agent: **backend 9/9** + all target frontend
+  flows green (`/app/test_reports/iteration_10.json`). Kernel ping v6
+  confirmed. `game_type=ragnarok` → `options.victory=lastStanding`. All
+  six scenarios round-trip through `create-game`.
+
 ### 2026-02 — Kernel v5 hosting slim-down (no new zip)
 - **App.js split (task 1)**: extracted `SystemDetailsPanel.jsx` (194 lines)
   and `hooks/useOrderSubmit.js` (owns `submitOrders`,

@@ -39,7 +39,12 @@ _game_types_cache: Optional[List[Dict[str, Any]]] = None
 
 
 def _game_types() -> List[Dict[str, Any]]:
-    """Fetch the kernel's canonical game type list. Cached process-wide."""
+    """Fetch the kernel's canonical game type list. Cached process-wide.
+
+    The cache lives for the lifetime of the FastAPI process. If Grok Build
+    hot-swaps cli.mjs without a backend restart, this list can go stale —
+    restart the backend after unpacking a new kernel zip.
+    """
     global _game_types_cache
     if _game_types_cache is None:
         data = kernel("listGameTypes")
